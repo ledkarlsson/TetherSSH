@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TetherSSH</title>
+    <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="connection-panel">
+        <header>
+          <h1>TetherSSH</h1>
+          <p>Terminal and remote files, tied to one SSH session.</p>
+        </header>
+
+        <form id="connection-form" class="connection-form" onsubmit="return false">
+          <label>
+            Host
+            <input id="host" name="host" autocomplete="hostname" required placeholder="server.example.com" />
+          </label>
+
+          <div class="inline-fields">
+            <label>
+              Port
+              <input id="port" name="port" type="number" min="1" max="65535" value="22" required />
+            </label>
+
+            <label>
+              User
+              <input id="username" name="username" autocomplete="username" required />
+            </label>
+          </div>
+
+          <fieldset>
+            <legend>Auth</legend>
+            <label class="radio-row">
+              <input type="radio" name="authMode" value="password" checked />
+              Password
+            </label>
+            <label class="radio-row">
+              <input type="radio" name="authMode" value="privateKey" />
+              Private key path
+            </label>
+          </fieldset>
+
+          <label id="password-row">
+            Password
+            <input id="password" name="password" type="password" autocomplete="current-password" />
+          </label>
+
+          <label id="key-row" hidden>
+            Private key path
+            <input id="privateKeyPath" name="privateKeyPath" placeholder="C:\Users\you\.ssh\id_ed25519" />
+          </label>
+
+          <button id="connect-button" type="button">Connect</button>
+          <button id="disconnect-button" type="button" disabled>Disconnect</button>
+        </form>
+
+        <div id="status" class="status">Disconnected</div>
+        <section class="session-log-panel">
+          <div class="session-log-title">
+            <span>Session log</span>
+            <button id="toggle-session-log" type="button" aria-expanded="true">Hide</button>
+          </div>
+          <ol id="session-log" class="session-log"></ol>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <section class="terminal-pane">
+          <div class="pane-header">
+            <span>Terminal</span>
+            <code id="cwd">.</code>
+          </div>
+          <div id="terminal"></div>
+        </section>
+
+        <section class="files-pane">
+          <div class="pane-header">
+            <span>Remote files</span>
+            <button id="refresh-files" type="button" title="Refresh current directory">Refresh</button>
+          </div>
+          <ol id="file-tree" class="file-tree"></ol>
+        </section>
+      </section>
+    </main>
+
+    <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,252 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: #101316;
+  color: #d7dde5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 960px;
+  min-height: 640px;
+  background: #101316;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr);
+  height: 100vh;
+}
+
+.connection-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 22px;
+  border-right: 1px solid #26303a;
+  background: #151a1f;
+}
+
+.connection-panel h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.connection-panel p {
+  margin: 8px 0 0;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.connection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.connection-form label,
+.connection-form fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  color: #b8c2cf;
+  font-size: 13px;
+}
+
+.connection-form fieldset {
+  padding: 10px;
+  border: 1px solid #33404d;
+  border-radius: 6px;
+}
+
+.connection-form legend {
+  padding: 0 6px;
+}
+
+.radio-row {
+  flex-direction: row !important;
+  align-items: center;
+}
+
+.inline-fields {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 10px;
+}
+
+input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #33404d;
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: #0f1419;
+  color: #edf2f7;
+}
+
+button {
+  min-height: 34px;
+  border: 1px solid #3b4858;
+  border-radius: 6px;
+  padding: 7px 11px;
+  background: #223041;
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.status {
+  min-height: 42px;
+  margin-top: auto;
+  padding: 10px;
+  border: 1px solid #33404d;
+  border-radius: 6px;
+  color: #cbd5e1;
+  background: #10161c;
+  line-height: 1.35;
+}
+
+.session-log-panel {
+  display: grid;
+  grid-template-rows: 30px minmax(0, 1fr);
+  min-height: 148px;
+  max-height: 260px;
+  border: 1px solid #33404d;
+  border-radius: 6px;
+  background: #0f1419;
+}
+
+.session-log-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  border-bottom: 1px solid #26303a;
+  color: #b8c2cf;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.session-log-title button {
+  min-height: 22px;
+  padding: 2px 8px;
+  border-color: #33404d;
+  background: #17202a;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+
+.session-log {
+  min-height: 0;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  color: #94a3b8;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  list-style: none;
+}
+
+.session-log li + li {
+  margin-top: 4px;
+}
+
+.session-log-collapsed .session-log-panel {
+  grid-template-rows: 30px 0;
+  min-height: 32px;
+  max-height: 32px;
+}
+
+.session-log-collapsed .session-log {
+  display: none;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  min-width: 0;
+}
+
+.terminal-pane,
+.files-pane {
+  display: grid;
+  grid-template-rows: 44px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.files-pane {
+  border-left: 1px solid #26303a;
+  background: #14191f;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 14px;
+  border-bottom: 1px solid #26303a;
+  color: #dce4ee;
+  font-weight: 600;
+}
+
+.pane-header code {
+  overflow: hidden;
+  max-width: 70%;
+  color: #9fb1c7;
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#terminal {
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.file-tree {
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  list-style: none;
+}
+
+.file-item button {
+  width: 100%;
+  justify-content: flex-start;
+  border-color: transparent;
+  background: transparent;
+  color: #d7dde5;
+  text-align: left;
+}
+
+.file-item-directory button {
+  color: #f5c84b;
+}
+
+.file-empty {
+  padding: 12px;
+  color: #94a3b8;
+}

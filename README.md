@@ -1,6 +1,6 @@
-# TetherTerm
+# TetherSSH
 
-TetherTerm is a cross-platform SSH client concept with a terminal and a synchronized remote file tree.
+TetherSSH is a cross-platform SSH client concept with a terminal and a synchronized remote file tree.
 
 The first goal is a small desktop MVP:
 
@@ -15,6 +15,20 @@ The first goal is a small desktop MVP:
 - xterm.js for the terminal UI.
 - ssh2 for SSH and SFTP sessions.
 - A shell integration marker, such as OSC 7, to detect the remote working directory.
+
+## Development
+
+Install dependencies:
+
+```powershell
+npm install
+```
+
+Run the app:
+
+```powershell
+npm run dev
+```
 
 ## MVP Milestones
 

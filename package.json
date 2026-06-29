@@ -1,0 +1,32 @@
+{
+  "name": "tetherssh",
+  "version": "0.1.0",
+  "description": "A cross-platform SSH client with a synchronized remote file tree.",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc && node scripts/copy-renderer-assets.mjs",
+    "dev": "npm run build && electron .",
+    "start": "electron ."
+  },
+  "keywords": [
+    "ssh",
+    "sftp",
+    "terminal",
+    "electron"
+  ],
+  "author": "Daniel Karlsson",
+  "license": "MIT",
+  "dependencies": {
+    "@xterm/xterm": "^5.5.0",
+    "electron": "^31.7.7",
+    "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "@types/ssh2": "^1.15.5",
+    "rimraf": "^5.0.10",
+    "typescript": "^5.5.4"
+  }
+}
