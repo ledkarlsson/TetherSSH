@@ -30,6 +30,27 @@ Run the app:
 npm run dev
 ```
 
+## SSH Test Container
+
+Start a local SSH/SFTP test server:
+
+```powershell
+docker compose -f docker-compose.ssh-test.yml up --build
+```
+
+Connect from TetherSSH with:
+
+- Host: `127.0.0.1`
+- Port: `2222`
+- User: `test`
+- Password: `testpass`
+
+Stop it with:
+
+```powershell
+docker compose -f docker-compose.ssh-test.yml down
+```
+
 ## MVP Milestones
 
 1. Create the desktop app shell.

@@ -1,0 +1,8 @@
+services:
+  ssh-test:
+    build:
+      context: .
+      dockerfile: docker/ssh-test/Dockerfile
+    container_name: tetherssh-test-ssh
+    ports:
+      - "2222:22"
