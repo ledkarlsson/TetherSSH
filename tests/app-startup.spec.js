@@ -24,6 +24,7 @@ test("starts the app without renderer errors", async () => {
   const port = "2222";
   const user = "test";
   const password = "testpass";
+  const target = `${user}@${server}:${port}`;
 
   try {
     await expect(page.locator("h1")).toHaveText("TetherSSH");
@@ -32,14 +33,10 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#file-tree")).toBeVisible();
     await expect(page.locator("#session-log")).toBeVisible();
 
-    await page.locator("#host").fill(server);
-    await page.locator("#port").fill(port);
-    await page.locator("#username").fill(user);
+    await page.locator("#target").fill(target);
     await page.locator("#password").fill(password);
 
-    await expect(page.locator("#host")).toHaveValue(server);
-    await expect(page.locator("#port")).toHaveValue(port);
-    await expect(page.locator("#username")).toHaveValue(user);
+    await expect(page.locator("#target")).toHaveValue(target);
     await expect(page.locator("#password")).toHaveValue(password);
     await expect(page.locator("#tcp-status")).toContainText("TCP reachable");
 

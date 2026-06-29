@@ -41,9 +41,7 @@ const XTerm = (globalThis as unknown as {
 
 const terminalElement = requireElement<HTMLDivElement>("#terminal");
 const form = requireElement<HTMLFormElement>("#connection-form");
-const hostInput = requireElement<HTMLInputElement>("#host");
-const portInput = requireElement<HTMLInputElement>("#port");
-const usernameInput = requireElement<HTMLInputElement>("#username");
+const targetInput = requireElement<HTMLInputElement>("#target");
 const connectButton = requireElement<HTMLButtonElement>("#connect-button");
 const disconnectButton = requireElement<HTMLButtonElement>("#disconnect-button");
 const refreshButton = requireElement<HTMLButtonElement>("#refresh-files");
@@ -95,8 +93,7 @@ form.addEventListener("change", () => {
   keyRow.hidden = authMode !== "privateKey";
 });
 
-hostInput.addEventListener("input", scheduleTcpCheck);
-portInput.addEventListener("input", scheduleTcpCheck);
+targetInput.addEventListener("input", scheduleTcpCheck);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -107,6 +104,13 @@ async function connect(): Promise<void> {
   const config = readConnectionConfig();
   clearSessionLog();
   appendSessionLog("Connect requested.");
+
+  if (!isValidConnectionConfig(config)) {
+    setStatus("Use the format user@hostname:port.");
+    appendSessionLog("Connect failed: invalid connection target.");
+    return;
+  }
+
   setStatus("Connecting...");
   connectButton.disabled = true;
 
@@ -211,11 +215,12 @@ if (window.tetherTerm) {
 function readConnectionConfig(): ConnectionConfig {
   const data = new FormData(form);
   const authMode = data.get("authMode") === "privateKey" ? "privateKey" : "password";
+  const target = parseConnectionTarget(String(data.get("target") ?? ""));
 
   return {
-    host: String(data.get("host") ?? "").trim(),
-    port: Number(data.get("port") ?? 22),
-    username: String(data.get("username") ?? "").trim(),
+    host: target.host,
+    port: target.port,
+    username: target.username,
     authMode,
     password: String(data.get("password") ?? ""),
     privateKeyPath: String(data.get("privateKeyPath") ?? "").trim()
@@ -234,9 +239,7 @@ async function loadSavedConnectionProfile(): Promise<void> {
       return;
     }
 
-    setInputValue("host", profile.host);
-    setInputValue("port", String(profile.port));
-    setInputValue("username", profile.username);
+    setTargetValue(profile);
     appendSessionLog("Loaded saved host, port, and user.");
     scheduleTcpCheck();
   } catch (error) {
@@ -252,12 +255,8 @@ function toConnectionProfile(config: ConnectionConfig): ConnectionProfile {
   };
 }
 
-function setInputValue(id: string, value: string): void {
-  const input = document.getElementById(id);
-
-  if (input instanceof HTMLInputElement) {
-    input.value = value;
-  }
+function setTargetValue(profile: ConnectionProfile): void {
+  targetInput.value = `${profile.username}@${profile.host}:${profile.port}`;
 }
 
 function scheduleTcpCheck(): void {
@@ -269,11 +268,10 @@ function scheduleTcpCheck(): void {
 }
 
 async function runTcpCheck(): Promise<void> {
-  const host = hostInput.value.trim();
-  const port = Number(portInput.value);
+  const target = parseConnectionTarget(targetInput.value);
 
-  if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !window.tetherTerm) {
-    setTcpStatus("idle", "Enter host and port");
+  if (!target.host || !target.username || !isValidPort(target.port) || !window.tetherTerm) {
+    setTcpStatus("idle", "Enter user@hostname:port");
     return;
   }
 
@@ -281,14 +279,14 @@ async function runTcpCheck(): Promise<void> {
   setTcpStatus("checking", "Checking TCP...");
 
   try {
-    const result: TcpTestResult = await window.tetherTerm.testTcpConnection(host, port);
+    const result: TcpTestResult = await window.tetherTerm.testTcpConnection(target.host, target.port);
 
     if (sequence !== tcpCheckSequence) {
       return;
     }
 
     if (result.reachable) {
-      setTcpStatus("reachable", `✓ TCP reachable on ${host}:${port}`);
+      setTcpStatus("reachable", `\u2713 TCP reachable on ${target.host}:${target.port}`);
     } else {
       setTcpStatus("unreachable", result.message ? `TCP not reachable: ${result.message}` : "TCP not reachable");
     }
@@ -312,6 +310,31 @@ function updateTerminalTitle(config: ConnectionConfig): void {
 
 function resetTerminalTitle(): void {
   terminalTitle.textContent = "Terminal";
+}
+
+function parseConnectionTarget(value: string): ConnectionProfile {
+  const trimmed = value.trim();
+  const atIndex = trimmed.lastIndexOf("@");
+  const username = atIndex > -1 ? trimmed.slice(0, atIndex).trim() : "";
+  const hostAndPort = atIndex > -1 ? trimmed.slice(atIndex + 1).trim() : trimmed;
+  const portSeparator = hostAndPort.lastIndexOf(":");
+  const hasPort = portSeparator > 0 && portSeparator < hostAndPort.length - 1;
+  const host = hasPort ? hostAndPort.slice(0, portSeparator).trim() : hostAndPort.trim();
+  const parsedPort = hasPort ? Number(hostAndPort.slice(portSeparator + 1)) : 22;
+
+  return {
+    username,
+    host,
+    port: hasPort ? parsedPort : 22
+  };
+}
+
+function isValidPort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
+}
+
+function isValidConnectionConfig(config: ConnectionConfig): boolean {
+  return Boolean(config.username && config.host && isValidPort(config.port));
 }
 
 async function refreshFiles(path: string): Promise<void> {
