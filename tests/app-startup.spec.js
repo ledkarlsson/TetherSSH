@@ -20,29 +20,35 @@ test("starts the app without renderer errors", async () => {
       errors.push(message.text());
     }
   });
-  const server = "localhost"
-  const port = "2222"
-  const user = "test"
-  const password = "testpass"
+  const server = "localhost";
+  const port = "2222";
+  const user = "test";
+  const password = "testpass";
 
-  await expect(page.locator("h1")).toHaveText("TetherSSH");
-  await expect(page.locator("#connection-form")).toBeVisible();
-  await expect(page.locator("#terminal")).toBeVisible();
-  await expect(page.locator("#file-tree")).toBeVisible();
-  await expect(page.locator("#session-log")).toBeVisible();
+  try {
+    await expect(page.locator("h1")).toHaveText("TetherSSH");
+    await expect(page.locator("#connection-form")).toBeVisible();
+    await expect(page.locator("#terminal")).toBeVisible();
+    await expect(page.locator("#file-tree")).toBeVisible();
+    await expect(page.locator("#session-log")).toBeVisible();
 
-  await page.locator("#host").fill(server);
-  await page.locator("#port").fill(port);
-  await page.locator("#username").fill(user);
-  await page.locator("#password").fill(password);
+    await page.locator("#host").fill(server);
+    await page.locator("#port").fill(port);
+    await page.locator("#username").fill(user);
+    await page.locator("#password").fill(password);
 
-  await expect(page.locator("#host")).toHaveValue(server);
-  await expect(page.locator("#port")).toHaveValue(port);
-  await expect(page.locator("#username")).toHaveValue(user);
-await expect(page.locator("#password")).toHaveValue(password);
+    await expect(page.locator("#host")).toHaveValue(server);
+    await expect(page.locator("#port")).toHaveValue(port);
+    await expect(page.locator("#username")).toHaveValue(user);
+    await expect(page.locator("#password")).toHaveValue(password);
+    await expect(page.locator("#tcp-status")).toContainText("TCP reachable");
 
-  await page.waitForTimeout(500);
-  expect(errors).toEqual([]);
+    await page.locator("#password").press("Enter");
 
-  await app.close();
+    await expect(page.locator("#terminal-title")).toHaveText(`Connected to ${user}@${server}`);
+    await expect(page.locator("#status")).toHaveText(`Connected to ${user}@${server}`);
+    expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
 });

@@ -22,6 +22,11 @@ interface TerminalSize {
   rows: number;
 }
 
+interface TcpTestResult {
+  reachable: boolean;
+  message?: string;
+}
+
 interface RemoteFile {
   name: string;
   path: string;
@@ -37,6 +42,7 @@ interface ConnectResult {
 interface TetherTermApi {
   loadConnectionProfile(): Promise<ConnectionProfile | undefined>;
   saveConnectionProfile(profile: ConnectionProfile): Promise<void>;
+  testTcpConnection(host: string, port: number): Promise<TcpTestResult>;
   connect(config: ConnectionConfig): Promise<ConnectResult>;
   disconnect(): Promise<void>;
   sendTerminalInput(data: string): void;
@@ -53,6 +59,7 @@ interface TetherTermApi {
 const ipcChannels = {
   loadConnectionProfile: "settings:load-connection-profile",
   saveConnectionProfile: "settings:save-connection-profile",
+  testTcpConnection: "network:test-tcp-connection",
   connect: "session:connect",
   disconnect: "session:disconnect",
   terminalInput: "terminal:input",
@@ -73,6 +80,10 @@ const api: TetherTermApi = {
 
   saveConnectionProfile(profile: ConnectionProfile) {
     return ipcRenderer.invoke(ipcChannels.saveConnectionProfile, profile);
+  },
+
+  testTcpConnection(host: string, port: number) {
+    return ipcRenderer.invoke(ipcChannels.testTcpConnection, host, port);
   },
 
   connect(config: ConnectionConfig) {

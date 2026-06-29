@@ -19,7 +19,7 @@
           <p>Terminal and remote files, tied to one SSH session.</p>
         </header>
 
-        <form id="connection-form" class="connection-form" onsubmit="return false">
+        <form id="connection-form" class="connection-form">
           <label>
             Host
             <input id="host" name="host" autocomplete="hostname" required placeholder="server.example.com" />
@@ -36,6 +36,8 @@
               <input id="username" name="username" autocomplete="username" required />
             </label>
           </div>
+
+          <div id="tcp-status" class="tcp-status tcp-status-idle">Enter host and port</div>
 
           <fieldset>
             <legend>Auth</legend>
@@ -59,7 +61,7 @@
             <input id="privateKeyPath" name="privateKeyPath" placeholder="C:\Users\you\.ssh\id_ed25519" />
           </label>
 
-          <button id="connect-button" type="button">Connect</button>
+          <button id="connect-button" type="submit">Connect</button>
           <button id="disconnect-button" type="button" disabled>Disconnect</button>
         </form>
 
@@ -76,7 +78,7 @@
       <section class="workspace">
         <section class="terminal-pane">
           <div class="pane-header">
-            <span>Terminal</span>
+            <span id="terminal-title">Terminal</span>
             <code id="cwd">.</code>
           </div>
           <div id="terminal"></div>

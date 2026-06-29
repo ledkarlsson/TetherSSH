@@ -22,6 +22,11 @@ interface ConnectionProfile {
   username: string;
 }
 
+interface TcpTestResult {
+  reachable: boolean;
+  message?: string;
+}
+
 interface RemoteFile {
   name: string;
   path: string;
@@ -36,12 +41,17 @@ const XTerm = (globalThis as unknown as {
 
 const terminalElement = requireElement<HTMLDivElement>("#terminal");
 const form = requireElement<HTMLFormElement>("#connection-form");
+const hostInput = requireElement<HTMLInputElement>("#host");
+const portInput = requireElement<HTMLInputElement>("#port");
+const usernameInput = requireElement<HTMLInputElement>("#username");
 const connectButton = requireElement<HTMLButtonElement>("#connect-button");
 const disconnectButton = requireElement<HTMLButtonElement>("#disconnect-button");
 const refreshButton = requireElement<HTMLButtonElement>("#refresh-files");
 const toggleSessionLogButton = requireElement<HTMLButtonElement>("#toggle-session-log");
 const statusElement = requireElement<HTMLDivElement>("#status");
+const tcpStatusElement = requireElement<HTMLDivElement>("#tcp-status");
 const sessionLog = requireElement<HTMLOListElement>("#session-log");
+const terminalTitle = requireElement<HTMLSpanElement>("#terminal-title");
 const cwdElement = requireElement<HTMLElement>("#cwd");
 const fileTree = requireElement<HTMLOListElement>("#file-tree");
 const passwordRow = requireElement<HTMLLabelElement>("#password-row");
@@ -52,6 +62,8 @@ let connected = false;
 let loggedRemoteCwd = ".";
 let sftpAvailable = true;
 let sftpMessage = "";
+let tcpCheckTimer: number | undefined;
+let tcpCheckSequence = 0;
 
 const terminal = new XTerm({
   cursorBlink: true,
@@ -83,9 +95,8 @@ form.addEventListener("change", () => {
   keyRow.hidden = authMode !== "privateKey";
 });
 
-connectButton.addEventListener("click", async () => {
-  await connect();
-});
+hostInput.addEventListener("input", scheduleTcpCheck);
+portInput.addEventListener("input", scheduleTcpCheck);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -109,6 +120,7 @@ async function connect(): Promise<void> {
     disconnectButton.disabled = false;
     currentPath = result.cwd;
     updateCwd(currentPath);
+    updateTerminalTitle(config);
     setStatus(`Connected to ${config.username}@${config.host}`);
     appendSessionLog("Connected.");
     await refreshFiles(currentPath);
@@ -128,6 +140,7 @@ disconnectButton.addEventListener("click", async () => {
   connected = false;
   connectButton.disabled = false;
   disconnectButton.disabled = true;
+  resetTerminalTitle();
   setStatus("Disconnected");
 });
 
@@ -186,6 +199,7 @@ if (window.tetherTerm) {
     connected = false;
     connectButton.disabled = false;
     disconnectButton.disabled = true;
+    resetTerminalTitle();
     setStatus("Disconnected");
     appendSessionLog("Session closed.");
   });
@@ -224,6 +238,7 @@ async function loadSavedConnectionProfile(): Promise<void> {
     setInputValue("port", String(profile.port));
     setInputValue("username", profile.username);
     appendSessionLog("Loaded saved host, port, and user.");
+    scheduleTcpCheck();
   } catch (error) {
     appendSessionLog(`Could not load saved connection: ${toErrorMessage(error)}`);
   }
@@ -243,6 +258,60 @@ function setInputValue(id: string, value: string): void {
   if (input instanceof HTMLInputElement) {
     input.value = value;
   }
+}
+
+function scheduleTcpCheck(): void {
+  window.clearTimeout(tcpCheckTimer);
+  setTcpStatus("idle", "Waiting to test TCP reachability");
+  tcpCheckTimer = window.setTimeout(() => {
+    void runTcpCheck();
+  }, 450);
+}
+
+async function runTcpCheck(): Promise<void> {
+  const host = hostInput.value.trim();
+  const port = Number(portInput.value);
+
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !window.tetherTerm) {
+    setTcpStatus("idle", "Enter host and port");
+    return;
+  }
+
+  const sequence = ++tcpCheckSequence;
+  setTcpStatus("checking", "Checking TCP...");
+
+  try {
+    const result: TcpTestResult = await window.tetherTerm.testTcpConnection(host, port);
+
+    if (sequence !== tcpCheckSequence) {
+      return;
+    }
+
+    if (result.reachable) {
+      setTcpStatus("reachable", `✓ TCP reachable on ${host}:${port}`);
+    } else {
+      setTcpStatus("unreachable", result.message ? `TCP not reachable: ${result.message}` : "TCP not reachable");
+    }
+  } catch (error) {
+    if (sequence !== tcpCheckSequence) {
+      return;
+    }
+
+    setTcpStatus("unreachable", `TCP check failed: ${toErrorMessage(error)}`);
+  }
+}
+
+function setTcpStatus(state: "idle" | "checking" | "reachable" | "unreachable", message: string): void {
+  tcpStatusElement.className = `tcp-status tcp-status-${state}`;
+  tcpStatusElement.textContent = message;
+}
+
+function updateTerminalTitle(config: ConnectionConfig): void {
+  terminalTitle.textContent = `Connected to ${config.username}@${config.host}`;
+}
+
+function resetTerminalTitle(): void {
+  terminalTitle.textContent = "Terminal";
 }
 
 async function refreshFiles(path: string): Promise<void> {

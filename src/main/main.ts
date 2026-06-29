@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from "electron";
+import net from "node:net";
 import path from "node:path";
 import { SshSession } from "./sshSession";
 import { ConnectionConfig, ipcChannels, TerminalSize } from "../shared/ipc";
@@ -20,6 +21,10 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false
     }
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = undefined;
   });
 
   void mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -53,32 +58,36 @@ function registerIpcHandlers(): void {
     await saveConnectionProfile(profile);
   });
 
+  ipcMain.handle(ipcChannels.testTcpConnection, async (_event, host: string, port: number) => {
+    return testTcpConnection(host, port);
+  });
+
   ipcMain.handle(ipcChannels.connect, async (_event, config: ConnectionConfig) => {
     session?.disconnect();
     session = new SshSession(config);
 
     session.on("data", (data) => {
-      mainWindow?.webContents.send(ipcChannels.terminalData, data);
+      sendToRenderer(ipcChannels.terminalData, data);
     });
 
     session.on("cwd", (cwd) => {
-      mainWindow?.webContents.send(ipcChannels.remoteCwd, cwd);
+      sendToRenderer(ipcChannels.remoteCwd, cwd);
     });
 
     session.on("sftpStatus", (status) => {
-      mainWindow?.webContents.send(ipcChannels.sftpStatus, status);
+      sendToRenderer(ipcChannels.sftpStatus, status);
     });
 
     session.on("log", (message) => {
-      mainWindow?.webContents.send(ipcChannels.sessionLog, message);
+      sendToRenderer(ipcChannels.sessionLog, message);
     });
 
     session.on("error", (error) => {
-      mainWindow?.webContents.send(ipcChannels.sessionError, error.message);
+      sendToRenderer(ipcChannels.sessionError, error.message);
     });
 
     session.on("close", () => {
-      mainWindow?.webContents.send(ipcChannels.sessionClosed);
+      sendToRenderer(ipcChannels.sessionClosed);
     });
 
     return session.connect();
@@ -98,7 +107,7 @@ function registerIpcHandlers(): void {
       return await session.readDirectory(remotePath);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      mainWindow?.webContents.send(ipcChannels.sessionLog, `Could not read remote directory: ${message}`);
+      sendToRenderer(ipcChannels.sessionLog, `Could not read remote directory: ${message}`);
       return [];
     }
   });
@@ -109,5 +118,35 @@ function registerIpcHandlers(): void {
 
   ipcMain.on(ipcChannels.terminalResize, (_event, size: TerminalSize) => {
     session?.resize(size);
+  });
+}
+
+function sendToRenderer(channel: string, ...args: unknown[]): void {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
+    return;
+  }
+
+  mainWindow.webContents.send(channel, ...args);
+}
+
+function testTcpConnection(host: string, port: number): Promise<{ reachable: boolean; message?: string }> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    let settled = false;
+
+    const finish = (result: { reachable: boolean; message?: string }) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+
+    socket.setTimeout(1_500);
+    socket.once("connect", () => finish({ reachable: true }));
+    socket.once("timeout", () => finish({ reachable: false, message: "Timed out" }));
+    socket.once("error", (error) => finish({ reachable: false, message: error.message }));
   });
 }

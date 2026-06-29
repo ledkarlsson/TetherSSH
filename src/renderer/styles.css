@@ -85,6 +85,33 @@ input {
   gap: 10px;
 }
 
+.tcp-status {
+  min-height: 30px;
+  padding: 7px 9px;
+  border: 1px solid #33404d;
+  border-radius: 6px;
+  background: #10161c;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.tcp-status-checking {
+  color: #d7dde5;
+}
+
+.tcp-status-reachable {
+  border-color: #2f8a5b;
+  background: #10251b;
+  color: #6ee7a8;
+}
+
+.tcp-status-unreachable {
+  border-color: #8a4a4a;
+  background: #261616;
+  color: #f0a3a3;
+}
+
 input {
   width: 100%;
   min-height: 34px;
