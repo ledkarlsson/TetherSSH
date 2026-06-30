@@ -189,7 +189,7 @@ if (window.tetherTerm) {
     }
 
     if (followPwdCheckbox.checked) {
-      void refreshFiles(path);
+      void refreshFiles(path, { showLoading: false });
     }
   });
 
@@ -200,7 +200,7 @@ if (window.tetherTerm) {
     if (!status.available) {
       fileTree.replaceChildren(emptyItem(`SFTP unavailable: ${sftpMessage || "not connected"}`));
     } else {
-      void refreshFiles(currentPath);
+      void refreshFiles(currentPath, { showLoading: fileTree.childElementCount === 0 });
     }
   });
 
@@ -364,13 +364,15 @@ function isValidConnectionConfig(config: ConnectionConfig): boolean {
   return Boolean(config.username && config.host && isValidPort(config.port));
 }
 
-async function refreshFiles(path: string): Promise<void> {
+async function refreshFiles(path: string, options: { showLoading?: boolean } = {}): Promise<void> {
   if (!sftpAvailable) {
     fileTree.replaceChildren(emptyItem(`SFTP unavailable: ${sftpMessage || "not connected"}`));
     return;
   }
 
-  fileTree.replaceChildren(emptyItem("Loading..."));
+  if (options.showLoading ?? fileTree.childElementCount === 0) {
+    fileTree.replaceChildren(emptyItem("Loading..."));
+  }
 
   try {
     const files = await window.tetherTerm.readDirectory(path);
