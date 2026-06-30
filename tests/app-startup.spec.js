@@ -85,3 +85,39 @@ test("starts the app without renderer errors", async () => {
     await app.close();
   }
 });
+
+test("shows a friendly authentication failure for a wrong password", async () => {
+  const appRoot = path.resolve(__dirname, "..");
+  const app = await electron.launch({
+    args: [appRoot],
+    cwd: appRoot
+  });
+
+  const errors = [];
+  const page = await app.firstWindow();
+
+  page.on("pageerror", (error) => {
+    errors.push(error.message);
+  });
+
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      errors.push(message.text());
+    }
+  });
+
+  try {
+    await page.locator("#target").fill("test@localhost:2222");
+    await page.locator("#password").fill("wrong-password");
+    await expect(page.locator("#tcp-status")).toContainText("TCP reachable");
+
+    await page.locator("#password").press("Enter");
+
+    await expect(page.locator("#status")).toHaveText("Authentication failed. Check username and password.");
+    await expect(page.locator("#session-log")).toContainText("Connect failed: Authentication failed. Check username and password.");
+    await expect(page.locator("#connect-button")).toBeEnabled();
+    await expect(errors).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});

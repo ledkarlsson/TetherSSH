@@ -48,14 +48,16 @@ export class SshSession extends EventEmitter {
       }, 30_000);
 
       const rejectBeforeShell = (error: Error) => {
+        const userFacingError = toUserFacingConnectionError(error, this.config);
+
         if (!settled) {
           settled = true;
           clearTimeout(timeout);
-          reject(error);
+          reject(userFacingError);
         }
 
-        this.log(`Error: ${error.message}`);
-        this.emit("error", error);
+        this.log(`Error: ${userFacingError.message}`);
+        this.emit("error", userFacingError);
       };
 
       this.log(`Connecting to ${this.config.username}@${this.config.host}:${this.config.port}...`);
@@ -306,4 +308,25 @@ function keepPotentialOscPrefix(buffer: string): string {
   }
 
   return "";
+}
+
+function toUserFacingConnectionError(error: Error, config: ConnectionConfig): Error {
+  if (isAuthenticationError(error)) {
+    if (config.authMode === "password") {
+      return new Error("Authentication failed. Check username and password.");
+    }
+
+    return new Error("Authentication failed. Check username and private key.");
+  }
+
+  return error;
+}
+
+function isAuthenticationError(error: Error): boolean {
+  const errorWithLevel = error as Error & { level?: string };
+
+  return (
+    errorWithLevel.level === "client-authentication" ||
+    error.message === "All configured authentication methods failed"
+  );
 }

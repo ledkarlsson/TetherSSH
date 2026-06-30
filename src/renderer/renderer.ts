@@ -28,6 +28,10 @@ interface TcpTestResult {
   message?: string;
 }
 
+type ConnectResponse =
+  | { ok: true; result: { cwd: string } }
+  | { ok: false; message: string };
+
 interface RemoteFile {
   name: string;
   path: string;
@@ -125,12 +129,22 @@ async function connect(): Promise<void> {
   try {
     await window.tetherTerm.saveConnectionProfile(toConnectionProfile(config));
     appendSessionLog("Saved host, port, and user.");
-    const result = await window.tetherTerm.connect(config);
+    const response: ConnectResponse = await window.tetherTerm.connect(config);
+
+    if (!response.ok) {
+      connected = false;
+      connectButton.disabled = false;
+      disconnectButton.disabled = true;
+      setStatus(response.message);
+      appendSessionLog(`Connect failed: ${response.message}`);
+      return;
+    }
+
     connected = true;
     sftpAvailable = true;
     sftpMessage = "";
     disconnectButton.disabled = false;
-    currentPath = result.cwd;
+    currentPath = response.result.cwd;
     updateCwd(currentPath);
     updateTerminalTitle(config);
     setStatus(`Connected to ${config.username}@${config.host}`);
@@ -210,6 +224,10 @@ if (window.tetherTerm) {
   });
 
   window.tetherTerm.onSessionClosed(() => {
+    if (!connected) {
+      return;
+    }
+
     connected = false;
     connectButton.disabled = false;
     disconnectButton.disabled = true;

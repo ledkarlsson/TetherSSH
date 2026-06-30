@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, ipcMain } from "electron";
 import net from "node:net";
 import path from "node:path";
 import { SshSession } from "./sshSession";
-import { ConnectionConfig, ipcChannels, TerminalSize } from "../shared/ipc";
+import { ConnectResponse, ConnectionConfig, ipcChannels, TerminalSize } from "../shared/ipc";
 import { loadConnectionProfile, saveConnectionProfile } from "./settingsStore";
 
 let mainWindow: BrowserWindow | undefined;
@@ -70,7 +70,7 @@ function registerIpcHandlers(): void {
     clipboard.writeText(text);
   });
 
-  ipcMain.handle(ipcChannels.connect, async (_event, config: ConnectionConfig) => {
+  ipcMain.handle(ipcChannels.connect, async (_event, config: ConnectionConfig): Promise<ConnectResponse> => {
     session?.disconnect();
     session = new SshSession(config);
 
@@ -98,7 +98,14 @@ function registerIpcHandlers(): void {
       sendToRenderer(ipcChannels.sessionClosed);
     });
 
-    return session.connect();
+    try {
+      const result = await session.connect();
+      return { ok: true, result };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      session = undefined;
+      return { ok: false, message };
+    }
   });
 
   ipcMain.handle(ipcChannels.disconnect, async () => {

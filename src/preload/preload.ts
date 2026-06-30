@@ -39,13 +39,17 @@ interface ConnectResult {
   cwd: string;
 }
 
+type ConnectResponse =
+  | { ok: true; result: ConnectResult }
+  | { ok: false; message: string };
+
 interface TetherTermApi {
   loadConnectionProfile(): Promise<ConnectionProfile | undefined>;
   saveConnectionProfile(profile: ConnectionProfile): Promise<void>;
   testTcpConnection(host: string, port: number): Promise<TcpTestResult>;
   readClipboardText(): Promise<string>;
   writeClipboardText(text: string): Promise<void>;
-  connect(config: ConnectionConfig): Promise<ConnectResult>;
+  connect(config: ConnectionConfig): Promise<ConnectResponse>;
   disconnect(): Promise<void>;
   sendTerminalInput(data: string): void;
   resizeTerminal(size: TerminalSize): void;
