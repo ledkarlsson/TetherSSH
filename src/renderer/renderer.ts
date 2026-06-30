@@ -37,6 +37,18 @@ interface RemoteFile {
   modifiedAt?: number;
 }
 
+interface FileOperationResult {
+  ok: boolean;
+  message: string;
+  localPath?: string;
+}
+
+interface FileActivity {
+  message: string;
+  remotePath?: string;
+  timestamp?: number;
+}
+
 const XTerm = (globalThis as unknown as {
   Terminal: new (options: Record<string, unknown>) => XTermTerminal;
 }).Terminal;
@@ -55,6 +67,7 @@ const sessionLog = requireElement<HTMLOListElement>("#session-log");
 const terminalTitle = requireElement<HTMLSpanElement>("#terminal-title");
 const cwdElement = requireElement<HTMLElement>("#cwd");
 const fileTree = requireElement<HTMLOListElement>("#file-tree");
+const fileStatus = requireElement<HTMLDivElement>("#file-status");
 
 let currentPath = ".";
 let connected = false;
@@ -66,6 +79,9 @@ let tcpCheckSequence = 0;
 let transientStatusTimer: number | undefined;
 let lastClipboardShortcut = "";
 let lastClipboardShortcutAt = 0;
+let latestFileActivity: FileActivity | undefined;
+let fileActivityTimer: number | undefined;
+const fileContextMenu = createFileContextMenu();
 
 const terminal = new XTerm({
   cursorBlink: true,
@@ -87,6 +103,8 @@ terminal.onData((data) => {
 });
 
 window.addEventListener("resize", resizeTerminal);
+window.addEventListener("click", hideFileContextMenu);
+window.addEventListener("blur", hideFileContextMenu);
 terminalElement.addEventListener("keydown", (event) => {
   void handleTerminalClipboardShortcut(event);
 }, { capture: true });
@@ -202,6 +220,10 @@ if (window.tetherTerm) {
     } else {
       void refreshFiles(currentPath, { showLoading: fileTree.childElementCount === 0 });
     }
+  });
+
+  window.tetherTerm.onFileActivity((activity) => {
+    setFileActivity(activity);
   });
 
   window.tetherTerm.onSessionLog((message) => {
@@ -415,7 +437,12 @@ function renderFiles(files: RemoteFile[]): void {
     const button = document.createElement("button");
     button.type = "button";
     button.title = file.path;
-    button.disabled = true;
+    button.addEventListener("click", () => {
+      void openRemoteFile(file);
+    });
+    button.addEventListener("contextmenu", (event) => {
+      showFileContextMenu(event, file);
+    });
     button.append(fileIcon(file), fileLabel(file.name));
 
     item.append(button);
@@ -439,6 +466,9 @@ function renderDirectoryItem(file: RemoteFile, isParent: boolean): HTMLLIElement
     sendTerminalCd(file.path);
     void refreshFiles(currentPath);
   });
+  button.addEventListener("contextmenu", (event) => {
+    showFileContextMenu(event, file);
+  });
 
   if (isParent) {
     item.classList.add("file-item-parent");
@@ -446,6 +476,74 @@ function renderDirectoryItem(file: RemoteFile, isParent: boolean): HTMLLIElement
 
   item.append(button);
   return item;
+}
+
+function createFileContextMenu(): HTMLDivElement {
+  const menu = document.createElement("div");
+  menu.className = "file-context-menu";
+  menu.hidden = true;
+
+  const downloadButton = document.createElement("button");
+  downloadButton.type = "button";
+  downloadButton.textContent = "Download";
+  menu.append(downloadButton);
+  document.body.append(menu);
+
+  return menu;
+}
+
+function showFileContextMenu(event: MouseEvent, file: RemoteFile): void {
+  event.preventDefault();
+  event.stopPropagation();
+
+  fileContextMenu.replaceChildren();
+
+  const downloadButton = document.createElement("button");
+  downloadButton.type = "button";
+  downloadButton.textContent = "Download";
+  downloadButton.addEventListener("click", () => {
+    hideFileContextMenu();
+    void downloadRemoteItem(file);
+  });
+
+  fileContextMenu.append(downloadButton);
+  fileContextMenu.style.left = `${event.clientX}px`;
+  fileContextMenu.style.top = `${event.clientY}px`;
+  fileContextMenu.hidden = false;
+}
+
+function hideFileContextMenu(): void {
+  fileContextMenu.hidden = true;
+}
+
+async function downloadRemoteItem(file: RemoteFile): Promise<void> {
+  if (!connected || !window.tetherTerm) {
+    return;
+  }
+
+  appendSessionLog(`Downloading ${file.path}...`);
+  const result: FileOperationResult = await window.tetherTerm.downloadRemoteItem(file);
+  setTransientStatus(result.message);
+  setFileActivity({ message: result.message });
+
+  if (!result.ok) {
+    appendSessionLog(`Download failed: ${result.message}`);
+  }
+}
+
+async function openRemoteFile(file: RemoteFile): Promise<void> {
+  if (!connected || !window.tetherTerm || file.type !== "file") {
+    return;
+  }
+
+  appendSessionLog(`Opening ${file.path}...`);
+  const result: FileOperationResult = await window.tetherTerm.openRemoteFile(file);
+  setTransientStatus(result.message);
+  setFileActivity({ message: result.message, remotePath: file.path });
+
+  if (!result.ok) {
+    appendSessionLog(`Open failed: ${result.message}`);
+  }
 }
 
 function emptyItem(text: string): HTMLLIElement {
@@ -457,6 +555,46 @@ function emptyItem(text: string): HTMLLIElement {
 
 function updateCwd(path: string): void {
   cwdElement.textContent = path;
+}
+
+function setFileActivity(activity: FileActivity): void {
+  latestFileActivity = activity;
+  renderFileActivity();
+
+  if (fileActivityTimer) {
+    window.clearInterval(fileActivityTimer);
+    fileActivityTimer = undefined;
+  }
+
+  if (activity.timestamp) {
+    fileActivityTimer = window.setInterval(renderFileActivity, 1_000);
+  }
+}
+
+function renderFileActivity(): void {
+  if (!latestFileActivity) {
+    fileStatus.textContent = "No file activity";
+    return;
+  }
+
+  if (latestFileActivity.timestamp && latestFileActivity.remotePath) {
+    const fileName = latestFileActivity.remotePath.split("/").pop() || latestFileActivity.remotePath;
+    fileStatus.textContent = `file: ${fileName} changed ${formatRelativeSeconds(latestFileActivity.timestamp)} ago`;
+    return;
+  }
+
+  fileStatus.textContent = latestFileActivity.message;
+}
+
+function formatRelativeSeconds(timestamp: number): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1_000));
+
+  if (seconds < 60) {
+    return `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
 }
 
 function sendTerminalCd(path: string): void {

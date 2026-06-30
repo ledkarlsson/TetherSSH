@@ -5,6 +5,11 @@ import path from "node:path";
 import { Client, ClientChannel, ConnectConfig, SFTPWrapper } from "ssh2";
 import { ConnectResult, ConnectionConfig, RemoteFile, TerminalSize } from "../shared/ipc";
 
+export interface DownloadSummary {
+  files: number;
+  folders: number;
+}
+
 type SessionEvents = {
   data: [string];
   cwd: [string];
@@ -135,6 +140,54 @@ export class SshSession extends EventEmitter {
               return a.name.localeCompare(b.name);
             })
         );
+      });
+    });
+  }
+
+  async downloadFile(remotePath: string, localPath: string): Promise<DownloadSummary> {
+    const sftp = await this.requireSftp();
+    await new Promise<void>((resolve, reject) => {
+      sftp.fastGet(remotePath, localPath, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+
+    return { files: 1, folders: 0 };
+  }
+
+  async downloadDirectory(remotePath: string, localPath: string): Promise<DownloadSummary> {
+    await fs.promises.mkdir(localPath, { recursive: true });
+    const summary: DownloadSummary = { files: 0, folders: 1 };
+    const files = await this.readDirectory(remotePath);
+
+    for (const file of files) {
+      const childLocalPath = path.join(localPath, file.name);
+
+      if (file.type === "directory") {
+        addDownloadSummary(summary, await this.downloadDirectory(file.path, childLocalPath));
+      } else if (file.type === "file") {
+        addDownloadSummary(summary, await this.downloadFile(file.path, childLocalPath));
+      }
+    }
+
+    return summary;
+  }
+
+  async uploadFile(localPath: string, remotePath: string): Promise<void> {
+    const sftp = await this.requireSftp();
+    await new Promise<void>((resolve, reject) => {
+      sftp.fastPut(localPath, remotePath, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
       });
     });
   }
@@ -277,6 +330,16 @@ export class SshSession extends EventEmitter {
   private log(message: string): void {
     this.emit("log", message);
   }
+
+  private async requireSftp(): Promise<SFTPWrapper> {
+    await this.sftpReady;
+
+    if (!this.sftp) {
+      throw new Error(this.sftpUnavailableMessage || "SFTP is not connected.");
+    }
+
+    return this.sftp;
+  }
 }
 
 function joinRemotePath(parent: string, child: string): string {
@@ -347,4 +410,9 @@ function readDefaultPrivateKey(): { path: string; content: Buffer } | undefined 
   }
 
   return undefined;
+}
+
+function addDownloadSummary(target: DownloadSummary, addition: DownloadSummary): void {
+  target.files += addition.files;
+  target.folders += addition.folders;
 }

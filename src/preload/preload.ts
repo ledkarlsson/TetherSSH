@@ -31,6 +31,18 @@ interface RemoteFile {
   modifiedAt?: number;
 }
 
+interface FileOperationResult {
+  ok: boolean;
+  message: string;
+  localPath?: string;
+}
+
+interface FileActivity {
+  message: string;
+  remotePath?: string;
+  timestamp?: number;
+}
+
 interface ConnectResult {
   cwd: string;
 }
@@ -50,6 +62,9 @@ interface TetherTermApi {
   sendTerminalInput(data: string): void;
   resizeTerminal(size: TerminalSize): void;
   readDirectory(path: string): Promise<RemoteFile[]>;
+  downloadRemoteItem(file: RemoteFile): Promise<FileOperationResult>;
+  openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
+  onFileActivity(callback: (activity: FileActivity) => void): () => void;
   onTerminalData(callback: (data: string) => void): () => void;
   onRemoteCwd(callback: (path: string) => void): () => void;
   onSftpStatus(callback: (status: { available: boolean; message?: string }) => void): () => void;
@@ -72,6 +87,9 @@ const ipcChannels = {
   remoteCwd: "remote:cwd",
   sftpStatus: "sftp:status",
   readDirectory: "sftp:read-directory",
+  downloadRemoteItem: "sftp:download-remote-item",
+  openRemoteFile: "sftp:open-remote-file",
+  fileActivity: "file:activity",
   sessionLog: "session:log",
   sessionError: "session:error",
   sessionClosed: "session:closed"
@@ -116,6 +134,18 @@ const api: TetherTermApi = {
 
   readDirectory(path: string) {
     return ipcRenderer.invoke(ipcChannels.readDirectory, path);
+  },
+
+  downloadRemoteItem(file: RemoteFile) {
+    return ipcRenderer.invoke(ipcChannels.downloadRemoteItem, file);
+  },
+
+  openRemoteFile(file: RemoteFile) {
+    return ipcRenderer.invoke(ipcChannels.openRemoteFile, file);
+  },
+
+  onFileActivity(callback: (activity: FileActivity) => void) {
+    return subscribe(ipcChannels.fileActivity, callback);
   },
 
   onTerminalData(callback: (data: string) => void) {

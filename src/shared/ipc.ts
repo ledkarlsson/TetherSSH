@@ -19,6 +19,18 @@ export interface RemoteFile {
   modifiedAt?: number;
 }
 
+export interface FileOperationResult {
+  ok: boolean;
+  message: string;
+  localPath?: string;
+}
+
+export interface FileActivity {
+  message: string;
+  remotePath?: string;
+  timestamp?: number;
+}
+
 export interface TerminalSize {
   cols: number;
   rows: number;
@@ -48,6 +60,9 @@ export interface TetherTermApi {
   sendTerminalInput(data: string): void;
   resizeTerminal(size: TerminalSize): void;
   readDirectory(path: string): Promise<RemoteFile[]>;
+  downloadRemoteItem(file: RemoteFile): Promise<FileOperationResult>;
+  openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
+  onFileActivity(callback: (activity: FileActivity) => void): () => void;
   onTerminalData(callback: (data: string) => void): () => void;
   onRemoteCwd(callback: (path: string) => void): () => void;
   onSftpStatus(callback: (status: { available: boolean; message?: string }) => void): () => void;
@@ -70,6 +85,9 @@ export const ipcChannels = {
   remoteCwd: "remote:cwd",
   sftpStatus: "sftp:status",
   readDirectory: "sftp:read-directory",
+  downloadRemoteItem: "sftp:download-remote-item",
+  openRemoteFile: "sftp:open-remote-file",
+  fileActivity: "file:activity",
   sessionLog: "session:log",
   sessionError: "session:error",
   sessionClosed: "session:closed"

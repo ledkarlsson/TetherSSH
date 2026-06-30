@@ -33,6 +33,7 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#terminal-title")).toHaveText("not connected");
     await expect(page.locator("#terminal")).not.toContainText("TetherSSH MVP ready");
     await expect(page.locator("#file-tree")).toBeVisible();
+    await expect(page.locator("#file-status")).toHaveText("No file activity");
     await expect(page.locator("#session-log")).toBeVisible();
     await expect(page.locator("#refresh-files")).toHaveCount(0);
     await expect(page.locator("fieldset")).toHaveCount(0);
@@ -67,6 +68,13 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#terminal")).not.toContainText("__tetherssh_emit_cwd");
     await expect(page.locator("#follow-pwd")).toBeChecked();
     await expect(page.locator("#file-tree")).toContainText("projects");
+    await expect(page.locator(".file-item-file button", { hasText: "README.txt" })).toBeEnabled();
+
+    await page.locator(".file-item-file button", { hasText: "README.txt" }).click({ button: "right" });
+    await expect(page.locator(".file-context-menu")).toBeVisible();
+    await expect(page.locator(".file-context-menu")).toContainText("Download");
+    await page.locator("#terminal").click();
+    await expect(page.locator(".file-context-menu")).toBeHidden();
 
     await page.locator(".file-item-directory button", { hasText: "projects" }).click();
     await expect(page.locator("#cwd")).toHaveText(/\/home\/test\/projects/);

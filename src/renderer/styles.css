@@ -235,6 +235,7 @@ button:disabled {
 }
 
 .files-pane {
+  grid-template-rows: 44px minmax(0, 1fr) 30px;
   border-left: 1px solid #26303a;
   background: #14191f;
 }
@@ -357,4 +358,45 @@ button:disabled {
 .file-empty {
   padding: 12px;
   color: #94a3b8;
+}
+
+.file-status {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 10px;
+  border-top: 1px solid #26303a;
+  color: #9fb1c7;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-context-menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid #3b4858;
+  border-radius: 6px;
+  background: #151a1f;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.35);
+}
+
+.file-context-menu button {
+  width: 100%;
+  min-height: 28px;
+  border-color: transparent;
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  color: #d7dde5;
+  text-align: left;
+}
+
+.file-context-menu button:hover,
+.file-context-menu button:focus-visible {
+  background: #223041;
+  outline: none;
 }
