@@ -5,8 +5,8 @@
   "main": "dist/main/main.js",
   "scripts": {
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit",
-    "build": "tsc && node scripts/copy-renderer-assets.mjs",
+    "typecheck": "tsc -b --noEmit",
+    "build": "tsc -b && node scripts/copy-renderer-assets.mjs",
     "dist:win": "npm run build && electron-builder --win nsis portable --x64 --publish never",
     "dev": "npm run build && electron .",
     "start": "electron .",
