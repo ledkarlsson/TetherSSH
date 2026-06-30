@@ -7,7 +7,7 @@
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit",
     "build": "tsc && node scripts/copy-renderer-assets.mjs",
-    "dist:win": "npm run build && electron-builder --win nsis portable --x64",
+    "dist:win": "npm run build && electron-builder --win nsis portable --x64 --publish never",
     "dev": "npm run build && electron .",
     "start": "electron .",
     "test:e2e": "npm run build && playwright test"
