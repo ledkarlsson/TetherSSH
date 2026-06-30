@@ -38,6 +38,7 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("fieldset")).toHaveCount(0);
     await expect(page.locator("#privateKeyPath")).toHaveCount(0);
 
+    await page.locator("#target").fill("");
     await page.locator("#target").fill(target);
     await page.locator("#password").fill(password);
 
@@ -123,6 +124,7 @@ test("shows a friendly authentication failure for a wrong password", async () =>
   });
 
   try {
+    await page.locator("#target").fill("");
     await page.locator("#target").fill("test@localhost:2222");
     await page.locator("#password").fill("wrong-password");
     await expect(page.locator("#tcp-status")).toContainText("TCP reachable");
