@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { Client, ClientChannel, ConnectConfig, SFTPWrapper } from "ssh2";
 import { ConnectResult, ConnectionConfig, RemoteFile, TerminalSize } from "../shared/ipc";
@@ -75,7 +76,7 @@ export class SshSession extends EventEmitter {
         })
         .on("keyboard-interactive", (_name, _instructions, _language, prompts, finish) => {
           this.log(`Server requested keyboard-interactive auth (${prompts.length} prompt(s)).`);
-          if (this.config.authMode === "password" && this.config.password) {
+          if (this.config.password) {
             finish(prompts.map(() => this.config.password ?? ""));
           } else {
             finish([]);
@@ -144,19 +145,24 @@ export class SshSession extends EventEmitter {
       port: this.config.port,
       username: this.config.username,
       readyTimeout: 20_000,
-      tryKeyboard: this.config.authMode === "password"
+      tryKeyboard: Boolean(this.config.password)
     };
 
-    if (this.config.authMode === "privateKey") {
-      if (!this.config.privateKeyPath) {
-        throw new Error("Private key path is required.");
-      }
-
-      this.log(`Using private key: ${this.config.privateKeyPath}`);
-      connectConfig.privateKey = fs.readFileSync(this.config.privateKeyPath);
-    } else {
-      this.log("Using password auth.");
+    if (this.config.password) {
+      this.log("Password auth available.");
       connectConfig.password = this.config.password;
+    }
+
+    if (process.env.SSH_AUTH_SOCK) {
+      this.log("SSH agent auth available.");
+      connectConfig.agent = process.env.SSH_AUTH_SOCK;
+    }
+
+    const privateKey = this.config.password ? undefined : readDefaultPrivateKey();
+
+    if (privateKey) {
+      this.log(`Default private key auth available: ${privateKey.path}`);
+      connectConfig.privateKey = privateKey.content;
     }
 
     return connectConfig;
@@ -264,10 +270,6 @@ export class SshSession extends EventEmitter {
   }
 
   private emitCwd(cwd: string): void {
-    if (cwd === this.currentCwd) {
-      return;
-    }
-
     this.currentCwd = cwd;
     this.emit("cwd", cwd);
   }
@@ -310,13 +312,9 @@ function keepPotentialOscPrefix(buffer: string): string {
   return "";
 }
 
-function toUserFacingConnectionError(error: Error, config: ConnectionConfig): Error {
+function toUserFacingConnectionError(error: Error, _config: ConnectionConfig): Error {
   if (isAuthenticationError(error)) {
-    if (config.authMode === "password") {
-      return new Error("Authentication failed. Check username and password.");
-    }
-
-    return new Error("Authentication failed. Check username and private key.");
+    return new Error("Authentication failed. Check username, password, SSH agent, or key.");
   }
 
   return error;
@@ -329,4 +327,24 @@ function isAuthenticationError(error: Error): boolean {
     errorWithLevel.level === "client-authentication" ||
     error.message === "All configured authentication methods failed"
   );
+}
+
+function readDefaultPrivateKey(): { path: string; content: Buffer } | undefined {
+  const sshDirectory = path.join(os.homedir(), ".ssh");
+  const keyNames = ["id_ed25519", "id_ecdsa", "id_rsa", "id_dsa"];
+
+  for (const keyName of keyNames) {
+    const keyPath = path.join(sshDirectory, keyName);
+
+    try {
+      return {
+        path: keyPath,
+        content: fs.readFileSync(keyPath)
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return undefined;
 }

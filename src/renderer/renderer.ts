@@ -1,20 +1,17 @@
 type XTermTerminal = {
   open(element: HTMLElement): void;
+  focus(): void;
   write(data: string): void;
   onData(callback: (data: string) => void): void;
   resize(cols: number, rows: number): void;
   getSelection(): string;
 };
 
-type AuthMode = "password" | "privateKey";
-
 interface ConnectionConfig {
   host: string;
   port: number;
   username: string;
-  authMode: AuthMode;
   password?: string;
-  privateKeyPath?: string;
 }
 
 interface ConnectionProfile {
@@ -49,7 +46,7 @@ const form = requireElement<HTMLFormElement>("#connection-form");
 const targetInput = requireElement<HTMLInputElement>("#target");
 const connectButton = requireElement<HTMLButtonElement>("#connect-button");
 const disconnectButton = requireElement<HTMLButtonElement>("#disconnect-button");
-const refreshButton = requireElement<HTMLButtonElement>("#refresh-files");
+const toggleConnectionPanelButton = requireElement<HTMLButtonElement>("#toggle-connection-panel");
 const followPwdCheckbox = requireElement<HTMLInputElement>("#follow-pwd");
 const toggleSessionLogButton = requireElement<HTMLButtonElement>("#toggle-session-log");
 const statusElement = requireElement<HTMLDivElement>("#status");
@@ -58,8 +55,6 @@ const sessionLog = requireElement<HTMLOListElement>("#session-log");
 const terminalTitle = requireElement<HTMLSpanElement>("#terminal-title");
 const cwdElement = requireElement<HTMLElement>("#cwd");
 const fileTree = requireElement<HTMLOListElement>("#file-tree");
-const passwordRow = requireElement<HTMLLabelElement>("#password-row");
-const keyRow = requireElement<HTMLLabelElement>("#key-row");
 
 let currentPath = ".";
 let connected = false;
@@ -85,7 +80,6 @@ const terminal = new XTerm({
 });
 
 terminal.open(terminalElement);
-terminal.write("TetherSSH MVP ready.\r\n");
 terminal.onData((data) => {
   if (connected && window.tetherTerm) {
     window.tetherTerm.sendTerminalInput(data);
@@ -98,12 +92,6 @@ terminalElement.addEventListener("keydown", (event) => {
 }, { capture: true });
 
 void loadSavedConnectionProfile();
-
-form.addEventListener("change", () => {
-  const authMode = new FormData(form).get("authMode");
-  passwordRow.hidden = authMode !== "password";
-  keyRow.hidden = authMode !== "privateKey";
-});
 
 targetInput.addEventListener("input", scheduleTcpCheck);
 
@@ -149,6 +137,7 @@ async function connect(): Promise<void> {
     updateTerminalTitle(config);
     setStatus(`Connected to ${config.username}@${config.host}`);
     appendSessionLog("Connected.");
+    setConnectionPanelCollapsed(true);
     await refreshFiles(currentPath);
     resizeTerminal();
   } catch (error) {
@@ -167,11 +156,12 @@ disconnectButton.addEventListener("click", async () => {
   connectButton.disabled = false;
   disconnectButton.disabled = true;
   resetTerminalTitle();
+  setConnectionPanelCollapsed(false);
   setStatus("Disconnected");
 });
 
-refreshButton.addEventListener("click", () => {
-  void refreshFiles(currentPath);
+toggleConnectionPanelButton.addEventListener("click", () => {
+  setConnectionPanelCollapsed(!document.body.classList.contains("connection-panel-collapsed"));
 });
 
 toggleSessionLogButton.addEventListener("click", () => {
@@ -186,16 +176,16 @@ if (window.tetherTerm) {
   });
 
   window.tetherTerm.onRemoteCwd((path) => {
-    if (path === currentPath) {
-      return;
-    }
+    const pathChanged = path !== currentPath;
 
-    currentPath = path;
-    updateCwd(path);
+    if (pathChanged) {
+      currentPath = path;
+      updateCwd(path);
 
-    if (path !== loggedRemoteCwd) {
-      loggedRemoteCwd = path;
-      appendSessionLog(`Remote cwd: ${path}`);
+      if (path !== loggedRemoteCwd) {
+        loggedRemoteCwd = path;
+        appendSessionLog(`Remote cwd: ${path}`);
+      }
     }
 
     if (followPwdCheckbox.checked) {
@@ -232,6 +222,7 @@ if (window.tetherTerm) {
     connectButton.disabled = false;
     disconnectButton.disabled = true;
     resetTerminalTitle();
+    setConnectionPanelCollapsed(false);
     setStatus("Disconnected");
     appendSessionLog("Session closed.");
   });
@@ -242,16 +233,13 @@ if (window.tetherTerm) {
 
 function readConnectionConfig(): ConnectionConfig {
   const data = new FormData(form);
-  const authMode = data.get("authMode") === "privateKey" ? "privateKey" : "password";
   const target = parseConnectionTarget(String(data.get("target") ?? ""));
 
   return {
     host: target.host,
     port: target.port,
     username: target.username,
-    authMode,
-    password: String(data.get("password") ?? ""),
-    privateKeyPath: String(data.get("privateKeyPath") ?? "").trim()
+    password: String(data.get("password") ?? "")
   };
 }
 
@@ -337,7 +325,18 @@ function updateTerminalTitle(config: ConnectionConfig): void {
 }
 
 function resetTerminalTitle(): void {
-  terminalTitle.textContent = "Terminal";
+  terminalTitle.textContent = "not connected";
+}
+
+function setConnectionPanelCollapsed(collapsed: boolean): void {
+  document.body.classList.toggle("connection-panel-collapsed", collapsed);
+  toggleConnectionPanelButton.setAttribute("aria-expanded", String(!collapsed));
+  toggleConnectionPanelButton.title = collapsed ? "Show connection panel" : "Hide connection panel";
+  resizeTerminal();
+
+  if (collapsed) {
+    terminal.focus();
+  }
 }
 
 function parseConnectionTarget(value: string): ConnectionProfile {

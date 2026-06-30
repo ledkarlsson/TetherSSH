@@ -1,14 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-type AuthMode = "password" | "privateKey";
-
 interface ConnectionConfig {
   host: string;
   port: number;
   username: string;
-  authMode: AuthMode;
   password?: string;
-  privateKeyPath?: string;
 }
 
 interface ConnectionProfile {

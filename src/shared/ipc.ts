@@ -1,12 +1,8 @@
-export type AuthMode = "password" | "privateKey";
-
 export interface ConnectionConfig {
   host: string;
   port: number;
   username: string;
-  authMode: AuthMode;
   password?: string;
-  privateKeyPath?: string;
 }
 
 export interface ConnectionProfile {

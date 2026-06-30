@@ -30,8 +30,13 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("h1")).toHaveText("TetherSSH");
     await expect(page.locator("#connection-form")).toBeVisible();
     await expect(page.locator("#terminal")).toBeVisible();
+    await expect(page.locator("#terminal-title")).toHaveText("not connected");
+    await expect(page.locator("#terminal")).not.toContainText("TetherSSH MVP ready");
     await expect(page.locator("#file-tree")).toBeVisible();
     await expect(page.locator("#session-log")).toBeVisible();
+    await expect(page.locator("#refresh-files")).toHaveCount(0);
+    await expect(page.locator("fieldset")).toHaveCount(0);
+    await expect(page.locator("#privateKeyPath")).toHaveCount(0);
 
     await page.locator("#target").fill(target);
     await page.locator("#password").fill(password);
@@ -44,6 +49,17 @@ test("starts the app without renderer errors", async () => {
 
     await expect(page.locator("#terminal-title")).toHaveText(`Connected to ${user}@${server}`);
     await expect(page.locator("#status")).toHaveText(`Connected to ${user}@${server}`);
+    await expect(page.locator("body")).toHaveClass(/connection-panel-collapsed/);
+    await expect(page.locator("#connection-form")).toBeHidden();
+    await expect.poll(() => page.evaluate(() => {
+      const terminal = document.querySelector("#terminal");
+      return terminal?.contains(document.activeElement);
+    })).toBe(true);
+
+    await page.locator("#toggle-connection-panel").click();
+    await expect(page.locator("body")).not.toHaveClass(/connection-panel-collapsed/);
+    await expect(page.locator("#connection-form")).toBeVisible();
+
     await expect(page.locator("#terminal")).not.toContainText("No such file or directory");
     await expect(page.locator("#terminal")).not.toContainText("file://%s%s");
     await expect(page.locator("#terminal")).not.toContainText("TETHERSSH_RC");
@@ -113,8 +129,8 @@ test("shows a friendly authentication failure for a wrong password", async () =>
 
     await page.locator("#password").press("Enter");
 
-    await expect(page.locator("#status")).toHaveText("Authentication failed. Check username and password.");
-    await expect(page.locator("#session-log")).toContainText("Connect failed: Authentication failed. Check username and password.");
+    await expect(page.locator("#status")).toHaveText("Authentication failed. Check username, password, SSH agent, or key.");
+    await expect(page.locator("#session-log")).toContainText("Connect failed: Authentication failed. Check username, password, SSH agent, or key.");
     await expect(page.locator("#connect-button")).toBeEnabled();
     await expect(errors).toEqual([]);
   } finally {

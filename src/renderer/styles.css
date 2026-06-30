@@ -27,13 +27,44 @@ input {
   height: 100vh;
 }
 
+.connection-panel-collapsed .app-shell {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
 .connection-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 20px;
   padding: 22px;
   border-right: 1px solid #26303a;
   background: #151a1f;
+}
+
+.connection-panel-toggle {
+  min-height: 30px;
+  border-color: #33404d;
+  background: #17202a;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.connection-panel-collapsed .connection-panel {
+  align-items: center;
+  gap: 0;
+  padding: 8px 6px;
+}
+
+.connection-panel-collapsed .connection-panel > :not(.connection-panel-toggle) {
+  display: none;
+}
+
+.connection-panel-collapsed .connection-panel-toggle {
+  width: 30px;
+  min-height: 112px;
+  padding: 8px 4px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
 }
 
 .connection-panel h1 {
@@ -54,8 +85,7 @@ input {
   gap: 14px;
 }
 
-.connection-form label,
-.connection-form fieldset {
+.connection-form label {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -64,25 +94,10 @@ input {
   font-size: 13px;
 }
 
-.connection-form fieldset {
-  padding: 10px;
-  border: 1px solid #33404d;
-  border-radius: 6px;
-}
-
-.connection-form legend {
-  padding: 0 6px;
-}
-
-.radio-row {
-  flex-direction: row !important;
-  align-items: center;
-}
-
-.inline-fields {
-  display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
-  gap: 10px;
+.label-hint {
+  color: #7f8ea3;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .tcp-status {

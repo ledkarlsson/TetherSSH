@@ -14,6 +14,16 @@
   <body>
     <main class="app-shell">
       <aside class="connection-panel">
+        <button
+          id="toggle-connection-panel"
+          class="connection-panel-toggle"
+          type="button"
+          aria-expanded="true"
+          title="Toggle connection panel"
+        >
+          TetherSSH
+        </button>
+
         <header>
           <h1>TetherSSH</h1>
           <p>Terminal and remote files, tied to one SSH session.</p>
@@ -27,26 +37,9 @@
 
           <div id="tcp-status" class="tcp-status tcp-status-idle">Enter user@hostname:port</div>
 
-          <fieldset>
-            <legend>Auth</legend>
-            <label class="radio-row">
-              <input type="radio" name="authMode" value="password" checked />
-              Password
-            </label>
-            <label class="radio-row">
-              <input type="radio" name="authMode" value="privateKey" />
-              Private key path
-            </label>
-          </fieldset>
-
-          <label id="password-row">
-            Password
+          <label>
+            Password <span class="label-hint">optional</span>
             <input id="password" name="password" type="password" autocomplete="current-password" />
-          </label>
-
-          <label id="key-row" hidden>
-            Private key path
-            <input id="privateKeyPath" name="privateKeyPath" placeholder="C:\Users\you\.ssh\id_ed25519" />
           </label>
 
           <button id="connect-button" type="submit">Connect</button>
@@ -66,7 +59,7 @@
       <section class="workspace">
         <section class="terminal-pane">
           <div class="pane-header">
-            <span id="terminal-title">Terminal</span>
+            <span id="terminal-title">not connected</span>
             <code id="cwd">.</code>
           </div>
           <div id="terminal"></div>
@@ -78,9 +71,8 @@
             <div class="file-pane-actions">
               <label class="follow-pwd-toggle" title="Keep the file tree synchronized with terminal pwd">
                 <input id="follow-pwd" type="checkbox" checked />
-                Follow pwd
+                Tether to terminal
               </label>
-              <button id="refresh-files" type="button" title="Refresh current directory">Refresh</button>
             </div>
           </div>
           <ol id="file-tree" class="file-tree"></ol>
