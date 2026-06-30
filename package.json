@@ -20,6 +20,9 @@
   ],
   "author": "Daniel Karlsson",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "dependencies": {
     "@xterm/xterm": "^5.5.0",
     "ssh2": "^1.16.0"
@@ -28,8 +31,8 @@
     "@playwright/test": "^1.61.1",
     "@types/node": "^20.14.15",
     "@types/ssh2": "^1.15.5",
-    "electron": "^31.7.7",
-    "electron-builder": "^24.13.3",
+    "electron": "^42.5.1",
+    "electron-builder": "^26.15.3",
     "rimraf": "^5.0.10",
     "typescript": "^5.5.4"
   },
