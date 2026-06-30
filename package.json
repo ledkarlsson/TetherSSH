@@ -7,6 +7,7 @@
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit",
     "build": "tsc && node scripts/copy-renderer-assets.mjs",
+    "dist:win": "npm run build && electron-builder --win nsis portable --x64",
     "dev": "npm run build && electron .",
     "start": "electron .",
     "test:e2e": "npm run build && playwright test"
@@ -21,14 +22,42 @@
   "license": "MIT",
   "dependencies": {
     "@xterm/xterm": "^5.5.0",
-    "electron": "^31.7.7",
     "ssh2": "^1.16.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/node": "^20.14.15",
     "@types/ssh2": "^1.15.5",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
     "rimraf": "^5.0.10",
     "typescript": "^5.5.4"
+  },
+  "build": {
+    "appId": "se.ledkarlsson.tetherssh",
+    "productName": "TetherSSH",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-${arch}-setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}-portable.${ext}"
+    },
+    "npmRebuild": false
   }
 }
