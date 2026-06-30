@@ -44,6 +44,38 @@ test("starts the app without renderer errors", async () => {
 
     await expect(page.locator("#terminal-title")).toHaveText(`Connected to ${user}@${server}`);
     await expect(page.locator("#status")).toHaveText(`Connected to ${user}@${server}`);
+    await expect(page.locator("#follow-pwd")).toBeChecked();
+    await expect(page.locator("#file-tree")).toContainText("projects");
+
+    await page.locator(".file-item-directory button", { hasText: "projects" }).click();
+    await expect(page.locator("#cwd")).toHaveText(/\/home\/test\/projects/);
+
+    await page.evaluate(() => window.tetherTerm.writeClipboardText("PASTE_ONCE"));
+
+    await page.evaluate(() => {
+      const terminal = document.querySelector("#terminal");
+      terminal.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "v",
+        code: "KeyV",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+      }));
+      terminal.dispatchEvent(new KeyboardEvent("keyup", {
+        key: "v",
+        code: "KeyV",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true
+      }));
+    });
+    await expect(page.locator("#terminal")).toContainText("PASTE_ONCE");
+    await expect.poll(() => page.locator("#terminal").textContent().then((text) => {
+      return (text.match(/PASTE_ONCE/g) ?? []).length;
+    })).toBe(1);
+
     expect(errors).toEqual([]);
   } finally {
     await app.close();

@@ -75,7 +75,13 @@
         <section class="files-pane">
           <div class="pane-header">
             <span>Remote files</span>
-            <button id="refresh-files" type="button" title="Refresh current directory">Refresh</button>
+            <div class="file-pane-actions">
+              <label class="follow-pwd-toggle" title="Keep the file tree synchronized with terminal pwd">
+                <input id="follow-pwd" type="checkbox" checked />
+                Follow pwd
+              </label>
+              <button id="refresh-files" type="button" title="Refresh current directory">Refresh</button>
+            </div>
           </div>
           <ol id="file-tree" class="file-tree"></ol>
         </section>

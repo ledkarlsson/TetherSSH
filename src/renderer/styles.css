@@ -236,6 +236,29 @@ button:disabled {
   font-weight: 600;
 }
 
+.file-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.follow-pwd-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9fb1c7;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.follow-pwd-toggle input {
+  width: 14px;
+  min-height: 14px;
+  margin: 0;
+  accent-color: #6ee7a8;
+}
+
 .pane-header code {
   overflow: hidden;
   max-width: 70%;
@@ -255,22 +278,65 @@ button:disabled {
 
 .file-tree {
   margin: 0;
-  padding: 8px;
+  padding: 6px 0;
   overflow: auto;
   list-style: none;
 }
 
 .file-item button {
   width: 100%;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  min-height: 24px;
+  justify-content: stretch;
+  gap: 4px;
   border-color: transparent;
+  border-radius: 0;
+  padding: 2px 10px;
   background: transparent;
   color: #d7dde5;
   text-align: left;
 }
 
-.file-item-directory button {
-  color: #f5c84b;
+.file-item button:hover:not(:disabled),
+.file-item button:focus-visible {
+  background: #1e252e;
+  outline: none;
+}
+
+.file-item button:disabled {
+  opacity: 1;
+}
+
+.file-item-directory .file-label {
+  color: #dce4ee;
+}
+
+.file-item-parent .file-label {
+  color: #9fb1c7;
+}
+
+.file-icon {
+  color: #7f8ea3;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  text-align: center;
+}
+
+.file-icon-directory {
+  color: #c99a4e;
+}
+
+.file-icon-symlink {
+  color: #75c7d8;
+}
+
+.file-label {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-empty {

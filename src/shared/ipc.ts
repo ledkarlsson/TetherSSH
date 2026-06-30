@@ -41,6 +41,8 @@ export interface TetherTermApi {
   loadConnectionProfile(): Promise<ConnectionProfile | undefined>;
   saveConnectionProfile(profile: ConnectionProfile): Promise<void>;
   testTcpConnection(host: string, port: number): Promise<TcpTestResult>;
+  readClipboardText(): Promise<string>;
+  writeClipboardText(text: string): Promise<void>;
   connect(config: ConnectionConfig): Promise<ConnectResult>;
   disconnect(): Promise<void>;
   sendTerminalInput(data: string): void;
@@ -58,6 +60,8 @@ export const ipcChannels = {
   loadConnectionProfile: "settings:load-connection-profile",
   saveConnectionProfile: "settings:save-connection-profile",
   testTcpConnection: "network:test-tcp-connection",
+  readClipboardText: "clipboard:read-text",
+  writeClipboardText: "clipboard:write-text",
   connect: "session:connect",
   disconnect: "session:disconnect",
   terminalInput: "terminal:input",

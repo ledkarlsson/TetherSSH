@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain } from "electron";
 import net from "node:net";
 import path from "node:path";
 import { SshSession } from "./sshSession";
@@ -60,6 +60,14 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(ipcChannels.testTcpConnection, async (_event, host: string, port: number) => {
     return testTcpConnection(host, port);
+  });
+
+  ipcMain.handle(ipcChannels.readClipboardText, async () => {
+    return clipboard.readText();
+  });
+
+  ipcMain.handle(ipcChannels.writeClipboardText, async (_event, text: string) => {
+    clipboard.writeText(text);
   });
 
   ipcMain.handle(ipcChannels.connect, async (_event, config: ConnectionConfig) => {

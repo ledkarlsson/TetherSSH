@@ -3,6 +3,8 @@ type XTermTerminal = {
   write(data: string): void;
   onData(callback: (data: string) => void): void;
   resize(cols: number, rows: number): void;
+  getSelection(): string;
+  attachCustomKeyEventHandler(callback: (event: KeyboardEvent) => boolean): void;
 };
 
 type AuthMode = "password" | "privateKey";
@@ -45,6 +47,7 @@ const targetInput = requireElement<HTMLInputElement>("#target");
 const connectButton = requireElement<HTMLButtonElement>("#connect-button");
 const disconnectButton = requireElement<HTMLButtonElement>("#disconnect-button");
 const refreshButton = requireElement<HTMLButtonElement>("#refresh-files");
+const followPwdCheckbox = requireElement<HTMLInputElement>("#follow-pwd");
 const toggleSessionLogButton = requireElement<HTMLButtonElement>("#toggle-session-log");
 const statusElement = requireElement<HTMLDivElement>("#status");
 const tcpStatusElement = requireElement<HTMLDivElement>("#tcp-status");
@@ -62,6 +65,9 @@ let sftpAvailable = true;
 let sftpMessage = "";
 let tcpCheckTimer: number | undefined;
 let tcpCheckSequence = 0;
+let transientStatusTimer: number | undefined;
+let lastClipboardShortcut = "";
+let lastClipboardShortcutAt = 0;
 
 const terminal = new XTerm({
   cursorBlink: true,
@@ -82,8 +88,19 @@ terminal.onData((data) => {
     window.tetherTerm.sendTerminalInput(data);
   }
 });
+terminal.attachCustomKeyEventHandler((event) => {
+  if (!isTerminalClipboardShortcut(event)) {
+    return true;
+  }
+
+  void handleTerminalClipboardShortcut(event);
+  return false;
+});
 
 window.addEventListener("resize", resizeTerminal);
+terminalElement.addEventListener("keydown", (event) => {
+  void handleTerminalClipboardShortcut(event);
+}, { capture: true });
 
 void loadSavedConnectionProfile();
 
@@ -176,7 +193,9 @@ if (window.tetherTerm) {
       appendSessionLog(`Remote cwd: ${path}`);
     }
 
-    void refreshFiles(path);
+    if (followPwdCheckbox.checked) {
+      void refreshFiles(path);
+    }
   });
 
   window.tetherTerm.onSftpStatus((status) => {
@@ -354,35 +373,69 @@ async function refreshFiles(path: string): Promise<void> {
 }
 
 function renderFiles(files: RemoteFile[]): void {
+  const nodes: HTMLLIElement[] = [];
+
+  if (currentPath !== "/" && currentPath !== ".") {
+    nodes.push(renderDirectoryItem({
+      name: "..",
+      path: parentRemotePath(currentPath),
+      type: "directory",
+      size: 0
+    }, true));
+  }
+
   if (files.length === 0) {
+    if (nodes.length > 0) {
+      fileTree.replaceChildren(...nodes);
+      return;
+    }
+
     fileTree.replaceChildren(emptyItem("Empty directory"));
     return;
   }
 
-  const nodes = files.map((file) => {
+  nodes.push(...files.map((file) => {
+    if (file.type === "directory") {
+      return renderDirectoryItem(file, false);
+    }
+
     const item = document.createElement("li");
     item.className = `file-item file-item-${file.type}`;
 
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = `${iconFor(file)} ${file.name}`;
     button.title = file.path;
-
-    if (file.type === "directory") {
-      button.addEventListener("click", () => {
-        currentPath = file.path;
-        updateCwd(currentPath);
-        void refreshFiles(currentPath);
-      });
-    } else {
-      button.disabled = true;
-    }
+    button.disabled = true;
+    button.append(fileIcon(file), fileLabel(file.name));
 
     item.append(button);
     return item;
-  });
+  }));
 
   fileTree.replaceChildren(...nodes);
+}
+
+function renderDirectoryItem(file: RemoteFile, isParent: boolean): HTMLLIElement {
+  const item = document.createElement("li");
+  item.className = "file-item file-item-directory";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.title = file.path;
+  button.append(fileIcon(file), fileLabel(file.name));
+  button.addEventListener("click", () => {
+    currentPath = file.path;
+    updateCwd(currentPath);
+    sendTerminalCd(file.path);
+    void refreshFiles(currentPath);
+  });
+
+  if (isParent) {
+    item.classList.add("file-item-parent");
+  }
+
+  item.append(button);
+  return item;
 }
 
 function emptyItem(text: string): HTMLLIElement {
@@ -396,8 +449,109 @@ function updateCwd(path: string): void {
   cwdElement.textContent = path;
 }
 
+function sendTerminalCd(path: string): void {
+  if (!connected || !window.tetherTerm) {
+    return;
+  }
+
+  window.tetherTerm.sendTerminalInput(`cd ${shellQuote(path)}\n`);
+}
+
+async function handleTerminalClipboardShortcut(event: KeyboardEvent): Promise<void> {
+  if (!isTerminalClipboardShortcut(event)) {
+    return;
+  }
+
+  const key = event.key.toLowerCase();
+  const now = Date.now();
+
+  if (lastClipboardShortcut === key && now - lastClipboardShortcutAt < 75) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
+  lastClipboardShortcut = key;
+  lastClipboardShortcutAt = now;
+
+  if (key === "c") {
+    event.preventDefault();
+    event.stopPropagation();
+    await copyTerminalSelection();
+    return;
+  }
+
+  if (key === "v") {
+    event.preventDefault();
+    event.stopPropagation();
+    await pasteClipboardToTerminal();
+  }
+}
+
+function isTerminalClipboardShortcut(event: KeyboardEvent): boolean {
+  if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey || event.altKey) {
+    return false;
+  }
+
+  const key = event.key.toLowerCase();
+  return key === "c" || key === "v";
+}
+
+async function copyTerminalSelection(): Promise<void> {
+  const selection = readTerminalSelection();
+
+  if (selection) {
+    await window.tetherTerm.writeClipboardText(selection);
+    setTransientStatus("Copied terminal selection.");
+  } else {
+    setTransientStatus("No terminal selection to copy.");
+  }
+}
+
+async function pasteClipboardToTerminal(): Promise<void> {
+  const clipboardText = await window.tetherTerm.readClipboardText();
+
+  if (clipboardText && connected) {
+    window.tetherTerm.sendTerminalInput(clipboardText);
+  }
+}
+
+function readTerminalSelection(): string {
+  const xtermSelection = terminal.getSelection();
+
+  if (xtermSelection) {
+    return xtermSelection;
+  }
+
+  const browserSelection = window.getSelection();
+
+  if (browserSelection?.toString() && selectionIsInsideTerminal(browserSelection)) {
+    return browserSelection.toString();
+  }
+
+  return "";
+}
+
+function selectionIsInsideTerminal(selection: Selection): boolean {
+  if (selection.rangeCount === 0) {
+    return false;
+  }
+
+  const range = selection.getRangeAt(0);
+  return terminalElement.contains(range.commonAncestorContainer);
+}
+
 function setStatus(message: string): void {
   statusElement.textContent = message;
+}
+
+function setTransientStatus(message: string): void {
+  window.clearTimeout(transientStatusTimer);
+  const previous = statusElement.textContent || "Disconnected";
+  setStatus(message);
+  transientStatusTimer = window.setTimeout(() => {
+    setStatus(previous);
+  }, 1_500);
 }
 
 function clearSessionLog(): void {
@@ -423,10 +577,43 @@ function resizeTerminal(): void {
   }
 }
 
+function fileIcon(file: RemoteFile): HTMLSpanElement {
+  const icon = document.createElement("span");
+  icon.className = `file-icon file-icon-${file.type}`;
+  icon.textContent = iconFor(file);
+  return icon;
+}
+
+function fileLabel(name: string): HTMLSpanElement {
+  const label = document.createElement("span");
+  label.className = "file-label";
+  label.textContent = name;
+  return label;
+}
+
 function iconFor(file: RemoteFile): string {
-  if (file.type === "directory") return "[d]";
-  if (file.type === "symlink") return "[l]";
-  return "[f]";
+  if (file.type === "directory") return "▸";
+  if (file.type === "symlink") return "↪";
+  return "•";
+}
+
+function parentRemotePath(path: string): string {
+  if (path === "/" || path === ".") {
+    return path;
+  }
+
+  const normalized = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path;
+  const slashIndex = normalized.lastIndexOf("/");
+
+  if (slashIndex <= 0) {
+    return "/";
+  }
+
+  return normalized.slice(0, slashIndex);
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function toErrorMessage(error: unknown): string {
