@@ -183,7 +183,7 @@ export class SshSession extends EventEmitter {
   }
 
   private openShell(resolve: (result: ConnectResult) => void, reject: (error: Error) => void): void {
-    this.client.shell({ term: "xterm-256color", cols: 100, rows: 30 }, (error, stream) => {
+    this.client.exec(this.createShellWrapperCommand(), { pty: { term: "xterm-256color", cols: 100, rows: 30 } }, (error, stream) => {
       if (error) {
         this.log(`Could not open terminal shell: ${error.message}`);
         reject(error);
@@ -203,25 +203,37 @@ export class SshSession extends EventEmitter {
       });
 
       stream.on("close", () => this.emit("close"));
-      this.installShellIntegration();
       resolve({ cwd: this.currentCwd });
     });
   }
 
-  private installShellIntegration(): void {
-    const marker = "printf '\\033]7;file://%s%s\\033\\\\' \"$HOSTNAME\" \"$PWD\"";
-    const script = [
-      "",
-      "if [ -n \"$BASH_VERSION\" ]; then",
-      `  export PROMPT_COMMAND='${marker}; '\${PROMPT_COMMAND:-}`,
-      "elif [ -n \"$ZSH_VERSION\" ]; then",
-      `  precmd() { ${marker}; }`,
+  private createShellWrapperCommand(): string {
+    const rcFile = [
+      "if [ -n \"$TETHERSSH_RC\" ]; then",
+      "  rm -f \"$TETHERSSH_RC\"",
+      "  unset TETHERSSH_RC",
       "fi",
-      marker,
-      ""
+      "if [ -f \"$HOME/.bashrc\" ]; then",
+      "  . \"$HOME/.bashrc\"",
+      "fi",
+      "__tetherssh_emit_cwd() {",
+      "  printf '\\033]7;file://%s%s\\033\\\\' \"$HOSTNAME\" \"$PWD\"",
+      "}",
+      "if [ -n \"$PROMPT_COMMAND\" ]; then",
+      "  PROMPT_COMMAND=\"__tetherssh_emit_cwd; $PROMPT_COMMAND\"",
+      "else",
+      "  PROMPT_COMMAND=\"__tetherssh_emit_cwd\"",
+      "fi",
+      "__tetherssh_emit_cwd"
     ].join("\n");
+    const encodedRcFile = Buffer.from(rcFile, "utf8").toString("base64");
 
-    this.shell?.write(script);
+    return [
+      "TETHERSSH_RC=$(mktemp -t tetherssh.XXXXXX)",
+      `printf %s ${encodedRcFile} | base64 -d > "$TETHERSSH_RC"`,
+      "export TETHERSSH_RC",
+      "exec bash --rcfile \"$TETHERSSH_RC\" -i"
+    ].join(" && ");
   }
 
   private captureOsc7(data: string): void {

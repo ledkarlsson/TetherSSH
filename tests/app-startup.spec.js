@@ -44,6 +44,10 @@ test("starts the app without renderer errors", async () => {
 
     await expect(page.locator("#terminal-title")).toHaveText(`Connected to ${user}@${server}`);
     await expect(page.locator("#status")).toHaveText(`Connected to ${user}@${server}`);
+    await expect(page.locator("#terminal")).not.toContainText("No such file or directory");
+    await expect(page.locator("#terminal")).not.toContainText("file://%s%s");
+    await expect(page.locator("#terminal")).not.toContainText("TETHERSSH_RC");
+    await expect(page.locator("#terminal")).not.toContainText("__tetherssh_emit_cwd");
     await expect(page.locator("#follow-pwd")).toBeChecked();
     await expect(page.locator("#file-tree")).toContainText("projects");
 

@@ -4,7 +4,6 @@ type XTermTerminal = {
   onData(callback: (data: string) => void): void;
   resize(cols: number, rows: number): void;
   getSelection(): string;
-  attachCustomKeyEventHandler(callback: (event: KeyboardEvent) => boolean): void;
 };
 
 type AuthMode = "password" | "privateKey";
@@ -87,14 +86,6 @@ terminal.onData((data) => {
   if (connected && window.tetherTerm) {
     window.tetherTerm.sendTerminalInput(data);
   }
-});
-terminal.attachCustomKeyEventHandler((event) => {
-  if (!isTerminalClipboardShortcut(event)) {
-    return true;
-  }
-
-  void handleTerminalClipboardShortcut(event);
-  return false;
 });
 
 window.addEventListener("resize", resizeTerminal);
