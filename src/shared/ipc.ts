@@ -17,6 +17,7 @@ export interface RemoteFile {
   type: "directory" | "file" | "symlink" | "other";
   size: number;
   modifiedAt?: number;
+  permissions?: string;
 }
 
 export interface FileOperationResult {
@@ -64,6 +65,7 @@ export interface TetherTermApi {
   testTcpConnection(host: string, port: number): Promise<TcpTestResult>;
   readClipboardText(): Promise<string>;
   writeClipboardText(text: string): Promise<void>;
+  getPathForFile(file: File): string;
   connect(config: ConnectionConfig): Promise<ConnectResponse>;
   disconnect(): Promise<void>;
   sendTerminalInput(data: string): void;
@@ -71,6 +73,7 @@ export interface TetherTermApi {
   readDirectory(path: string): Promise<RemoteFile[]>;
   downloadRemoteItem(file: RemoteFile): Promise<FileOperationResult>;
   openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
+  uploadLocalItems(localPaths: string[], remotePath: string): Promise<FileOperationResult>;
   onFileActivity(callback: (activity: FileActivity) => void): () => void;
   onFileEditStatus(callback: (status: FileEditStatus) => void): () => void;
   onTerminalData(callback: (data: string) => void): () => void;
@@ -97,6 +100,7 @@ export const ipcChannels = {
   readDirectory: "sftp:read-directory",
   downloadRemoteItem: "sftp:download-remote-item",
   openRemoteFile: "sftp:open-remote-file",
+  uploadLocalItems: "sftp:upload-local-items",
   fileActivity: "file:activity",
   fileEditStatus: "file:edit-status",
   sessionLog: "session:log",

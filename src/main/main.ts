@@ -203,7 +203,6 @@ function registerIpcHandlers(): void {
       }
 
       sendToRenderer(ipcChannels.sessionLog, `Opened ${file.path} for editing.`);
-      sendToRenderer(ipcChannels.fileActivity, { message: `Editing ${file.name}. Saves upload automatically.`, remotePath: file.path });
       return { ok: true, message: `Opened ${file.name}.`, localPath };
     } catch (error) {
       const message = toErrorMessage(error);
@@ -211,6 +210,32 @@ function registerIpcHandlers(): void {
       return { ok: false, message };
     }
   });
+
+  ipcMain.handle(
+    ipcChannels.uploadLocalItems,
+    async (_event, localPaths: string[], remotePath: string): Promise<FileOperationResult> => {
+      if (!session) {
+        return { ok: false, message: "No active SSH session." };
+      }
+
+      if (localPaths.length === 0) {
+        return { ok: false, message: "No files selected for upload." };
+      }
+
+      try {
+        const summary = await session.uploadLocalItems(localPaths, remotePath);
+        const message = `Uploaded ${summary.files} file${summary.files === 1 ? "" : "s"} and ${summary.folders} folder${summary.folders === 1 ? "" : "s"}.`;
+        sendToRenderer(ipcChannels.sessionLog, `${message} Destination: ${remotePath}`);
+        sendToRenderer(ipcChannels.fileActivity, { message });
+        return { ok: true, message };
+      } catch (error) {
+        const message = `Upload failed: ${toErrorMessage(error)}`;
+        sendToRenderer(ipcChannels.sessionLog, message);
+        sendToRenderer(ipcChannels.fileActivity, { message });
+        return { ok: false, message };
+      }
+    }
+  );
 
   ipcMain.on(ipcChannels.terminalInput, (_event, data: string) => {
     session?.write(data);

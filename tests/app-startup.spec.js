@@ -58,6 +58,19 @@ test("starts the app without renderer errors", async () => {
       return terminal?.contains(document.activeElement);
     })).toBe(true);
 
+    const clipboardAvailable = await app.evaluate(({ clipboard }) => {
+      clipboard.writeText("PASTE_ONCE");
+      return clipboard.readText() === "PASTE_ONCE";
+    });
+
+    if (clipboardAvailable) {
+      await page.keyboard.press("Control+Shift+V");
+      await expect(page.locator("#terminal")).toContainText("PASTE_ONCE");
+      await expect.poll(() => page.locator("#terminal").textContent().then((text) => {
+        return (text.match(/PASTE_ONCE/g) ?? []).length;
+      })).toBe(1);
+    }
+
     await page.locator("#toggle-connection-panel").click();
     await expect(page.locator("body")).not.toHaveClass(/connection-panel-collapsed/);
     await expect(page.locator("#connection-form")).toBeVisible();
@@ -69,6 +82,16 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#follow-pwd")).toBeChecked();
     await expect(page.locator("#file-tree")).toContainText("projects");
     await expect(page.locator(".file-item-file button", { hasText: "README.txt" })).toBeEnabled();
+    await expect(page.locator("#file-summary")).toContainText(/\d+ files?/);
+    await expect(page.locator("#file-summary")).toContainText(/\d+ folders?/);
+    await expect(page.locator("#file-summary")).toContainText("Total");
+    await expect(page.locator(".file-item-file button", { hasText: "README.txt" }).locator(".file-metadata"))
+      .toContainText(/^-rw/);
+    await expect(page.locator("#file-sort")).toHaveValue("name");
+    await page.locator("#file-sort").selectOption("size");
+    await expect(page.locator("#file-sort")).toHaveValue("size");
+    await page.locator("#sort-direction").click();
+    await expect(page.locator("#sort-direction")).toHaveAttribute("aria-label", "Sort descending");
 
     const readmeStatus = page.locator(".file-item-file button", { hasText: "README.txt" }).locator(".file-edit-status");
     const syncedAt = Date.now();
@@ -81,7 +104,8 @@ test("starts the app without renderer errors", async () => {
       BrowserWindow.getAllWindows()[0].webContents.send("file:edit-status", payload);
     }, { remotePath: "/home/test/README.txt", status: "synced", message: "Synced README.txt.", timestamp: syncedAt });
     await expect(readmeStatus).toHaveText("editing, synced");
-    await expect(readmeStatus).toHaveAttribute("title", /Last synced:/);
+    const expectedSyncTime = await page.evaluate((timestamp) => new Date(timestamp).toLocaleString(), syncedAt);
+    await expect(readmeStatus).toHaveAttribute("title", `Last synced: ${expectedSyncTime}`);
 
     await app.evaluate(({ BrowserWindow }, payload) => {
       BrowserWindow.getAllWindows()[0].webContents.send("file:edit-status", payload);
@@ -94,34 +118,48 @@ test("starts the app without renderer errors", async () => {
     await page.locator("#terminal").click();
     await expect(page.locator(".file-context-menu")).toBeHidden();
 
-    await page.locator(".file-item-directory button", { hasText: "projects" }).click();
-    await expect(page.locator("#cwd")).toHaveText(/\/home\/test\/projects/);
+    const projectsDirectory = page.locator(".file-item-directory button", { hasText: "projects" }).first();
+    const cwdBeforeExpand = await page.locator("#cwd").textContent();
+    await projectsDirectory.click();
+    await expect(projectsDirectory).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(".file-item-directory button", { hasText: "demo" })).toBeVisible();
+    await expect(page.locator("#cwd")).toHaveText(cwdBeforeExpand);
+    await expect.poll(() => page.evaluate(() => {
+      const terminal = document.querySelector("#terminal");
+      return terminal?.contains(document.activeElement);
+    })).toBe(true);
 
-    await page.evaluate(() => window.tetherTerm.writeClipboardText("PASTE_ONCE"));
+    await projectsDirectory.click();
+    await expect(projectsDirectory).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator(".file-item-directory button", { hasText: "demo" })).toHaveCount(0);
 
     await page.evaluate(() => {
-      const terminal = document.querySelector("#terminal");
-      terminal.dispatchEvent(new KeyboardEvent("keydown", {
-        key: "v",
-        code: "KeyV",
-        ctrlKey: true,
-        shiftKey: true,
-        bubbles: true,
-        cancelable: true
-      }));
-      terminal.dispatchEvent(new KeyboardEvent("keyup", {
-        key: "v",
-        code: "KeyV",
-        ctrlKey: true,
-        shiftKey: true,
-        bubbles: true,
-        cancelable: true
-      }));
+      const input = document.createElement("input");
+      input.id = "e2e-upload-input";
+      input.type = "file";
+      input.hidden = true;
+      document.body.append(input);
     });
-    await expect(page.locator("#terminal")).toContainText("PASTE_ONCE");
-    await expect.poll(() => page.locator("#terminal").textContent().then((text) => {
-      return (text.match(/PASTE_ONCE/g) ?? []).length;
-    })).toBe(1);
+    await page.locator("#e2e-upload-input").setInputFiles(path.join(appRoot, "package.json"));
+    await page.evaluate(() => {
+      const input = document.querySelector("#e2e-upload-input");
+      const logs = [...document.querySelectorAll(".file-item-directory button")]
+        .find((button) => button.textContent.includes("logs"));
+      const transfer = new DataTransfer();
+      transfer.items.add(input.files[0]);
+      logs.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    });
+    await expect(page.locator("#file-status")).toHaveText("Uploaded 1 file and 0 folders.");
+
+    const logsDirectory = page.locator(".file-item-directory button", { hasText: "logs" }).first();
+    await logsDirectory.click();
+    await expect(page.locator(".file-item-file button", { hasText: "package.json" })).toBeVisible();
+    await page.evaluate(() => window.tetherTerm.sendTerminalInput("rm -f '/home/test/logs/package.json'\n"));
+
+    await projectsDirectory.dblclick();
+    await expect(page.locator("#cwd")).toHaveText(/\/home\/test\/projects/);
+    await expect(page.evaluate(() => typeof window.tetherTerm.getPathForFile)).resolves.toBe("function");
+    await expect(page.evaluate(() => typeof window.tetherTerm.uploadLocalItems)).resolves.toBe("function");
 
     expect(errors).toEqual([]);
   } finally {

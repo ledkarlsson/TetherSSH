@@ -137,7 +137,8 @@ export class SshSession extends EventEmitter {
               path: joinRemotePath(remotePath, item.filename),
               type: toRemoteFileType(item.longname),
               size: item.attrs.size,
-              modifiedAt: item.attrs.mtime ? item.attrs.mtime * 1000 : undefined
+              modifiedAt: item.attrs.mtime ? item.attrs.mtime * 1000 : undefined,
+              permissions: item.longname.slice(0, 10)
             }))
             .sort((a, b) => {
               if (a.type === "directory" && b.type !== "directory") return -1;
@@ -197,6 +198,17 @@ export class SshSession extends EventEmitter {
     });
   }
 
+  async uploadLocalItems(localPaths: string[], remoteDirectory: string): Promise<DownloadSummary> {
+    const summary: DownloadSummary = { files: 0, folders: 0 };
+
+    for (const localPath of localPaths) {
+      const name = path.basename(localPath);
+      await this.uploadLocalEntry(localPath, joinRemotePath(remoteDirectory, name), summary);
+    }
+
+    return summary;
+  }
+
   async stat(remotePath: string): Promise<RemoteFileStat> {
     const sftp = await this.requireSftp();
 
@@ -210,6 +222,61 @@ export class SshSession extends EventEmitter {
         resolve({
           size: stats.size,
           modifiedAt: stats.mtime ? stats.mtime * 1000 : undefined
+        });
+      });
+    });
+  }
+
+  private async uploadLocalEntry(
+    localPath: string,
+    remotePath: string,
+    summary: DownloadSummary
+  ): Promise<void> {
+    const stats = await fs.promises.stat(localPath);
+
+    if (stats.isDirectory()) {
+      await this.ensureRemoteDirectory(remotePath);
+      summary.folders += 1;
+      const entries = await fs.promises.readdir(localPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.isSymbolicLink()) {
+          continue;
+        }
+
+        await this.uploadLocalEntry(
+          path.join(localPath, entry.name),
+          joinRemotePath(remotePath, entry.name),
+          summary
+        );
+      }
+
+      return;
+    }
+
+    if (stats.isFile()) {
+      await this.uploadFile(localPath, remotePath);
+      summary.files += 1;
+    }
+  }
+
+  private async ensureRemoteDirectory(remotePath: string): Promise<void> {
+    const sftp = await this.requireSftp();
+
+    await new Promise<void>((resolve, reject) => {
+      sftp.mkdir(remotePath, (mkdirError) => {
+        if (!mkdirError) {
+          resolve();
+          return;
+        }
+
+        sftp.stat(remotePath, (statError, stats) => {
+          if (!statError && stats.isDirectory()) {
+            resolve();
+            return;
+          }
+
+          reject(mkdirError);
         });
       });
     });

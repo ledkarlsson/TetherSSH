@@ -66,8 +66,19 @@
         </section>
 
         <section class="files-pane">
-          <div class="pane-header">
-            <span>Remote files</span>
+          <div class="pane-header files-header">
+            <div class="files-header-row">
+              <span>Remote files</span>
+              <div class="sort-controls">
+                <label for="file-sort">Sort</label>
+                <select id="file-sort" title="Sort remote files">
+                  <option value="name">Name</option>
+                  <option value="size">Size</option>
+                  <option value="date">Date</option>
+                </select>
+                <button id="sort-direction" type="button" title="Sort ascending" aria-label="Sort ascending">↑</button>
+              </div>
+            </div>
             <div class="file-pane-actions">
               <label class="follow-pwd-toggle" title="Keep the file tree synchronized with terminal pwd">
                 <input id="follow-pwd" type="checkbox" checked />
@@ -76,7 +87,10 @@
             </div>
           </div>
           <ol id="file-tree" class="file-tree"></ol>
-          <div id="file-status" class="file-status" aria-live="polite">No file activity</div>
+          <footer class="file-footer">
+            <div id="file-summary" class="file-summary">0 files | 0 folders | Total 0 B</div>
+            <div id="file-status" class="file-status" aria-live="polite">No file activity</div>
+          </footer>
         </section>
       </section>
     </main>

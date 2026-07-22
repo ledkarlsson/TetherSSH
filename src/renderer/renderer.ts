@@ -35,6 +35,7 @@ interface RemoteFile {
   type: "directory" | "file" | "symlink" | "other";
   size: number;
   modifiedAt?: number;
+  permissions?: string;
 }
 
 interface FileOperationResult {
@@ -50,6 +51,7 @@ interface FileActivity {
 }
 
 type FileEditStatusKind = "editing" | "closed" | "uploading" | "synced" | "failed" | "conflict";
+type FileSortKey = "name" | "size" | "date";
 
 interface FileEditStatus {
   remotePath: string;
@@ -84,6 +86,9 @@ const terminalTitle = requireElement<HTMLSpanElement>("#terminal-title");
 const cwdElement = requireElement<HTMLElement>("#cwd");
 const fileTree = requireElement<HTMLOListElement>("#file-tree");
 const fileStatus = requireElement<HTMLDivElement>("#file-status");
+const fileSummary = requireElement<HTMLDivElement>("#file-summary");
+const fileSort = requireElement<HTMLSelectElement>("#file-sort");
+const sortDirectionButton = requireElement<HTMLButtonElement>("#sort-direction");
 
 let currentPath = ".";
 let connected = false;
@@ -99,6 +104,12 @@ let latestFileActivity: FileActivity | undefined;
 let fileActivityTimer: number | undefined;
 let renderedFiles: RemoteFile[] = [];
 const fileEditStatuses = new Map<string, FileEditViewState>();
+const expandedDirectories = new Set<string>();
+const directoryChildren = new Map<string, RemoteFile[]>();
+const loadingDirectories = new Set<string>();
+const directoryClickTimers = new Map<string, number>();
+let fileSortKey: FileSortKey = "name";
+let fileSortAscending = true;
 const fileContextMenu = createFileContextMenu();
 
 const terminal = new XTerm({
@@ -130,6 +141,22 @@ terminalElement.addEventListener("keydown", (event) => {
 void loadSavedConnectionProfile();
 
 targetInput.addEventListener("input", scheduleTcpCheck);
+fileSort.addEventListener("change", () => {
+  fileSortKey = fileSort.value as FileSortKey;
+  renderFiles(renderedFiles);
+  terminal.focus();
+});
+sortDirectionButton.addEventListener("click", () => {
+  fileSortAscending = !fileSortAscending;
+  updateSortDirectionButton();
+  renderFiles(renderedFiles);
+  terminal.focus();
+});
+fileTree.addEventListener("dragover", handleFileTreeDragOver);
+fileTree.addEventListener("dragleave", handleFileTreeDragLeave);
+fileTree.addEventListener("drop", (event) => {
+  void uploadDroppedItems(event, currentPath);
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -218,6 +245,7 @@ if (window.tetherTerm) {
 
     if (pathChanged) {
       currentPath = path;
+      clearExpandedDirectories();
       updateCwd(path);
 
       if (path !== loggedRemoteCwd) {
@@ -427,7 +455,13 @@ async function refreshFiles(path: string, options: { showLoading?: boolean } = {
 
   try {
     const files = await window.tetherTerm.readDirectory(path);
+
+    if (path !== currentPath) {
+      return;
+    }
+
     renderFiles(files);
+    void refreshExpandedDirectories();
   } catch (error) {
     fileTree.replaceChildren(emptyItem(toErrorMessage(error)));
   }
@@ -435,15 +469,16 @@ async function refreshFiles(path: string, options: { showLoading?: boolean } = {
 
 function renderFiles(files: RemoteFile[]): void {
   renderedFiles = files;
+  updateDirectorySummary(files);
   const nodes: HTMLLIElement[] = [];
 
   if (currentPath !== "/" && currentPath !== ".") {
-    nodes.push(renderDirectoryItem({
+    nodes.push(renderParentDirectoryItem({
       name: "..",
       path: parentRemotePath(currentPath),
       type: "directory",
       size: 0
-    }, true));
+    }));
   }
 
   if (files.length === 0) {
@@ -456,56 +491,206 @@ function renderFiles(files: RemoteFile[]): void {
     return;
   }
 
-  nodes.push(...files.map((file) => {
-    if (file.type === "directory") {
-      return renderDirectoryItem(file, false);
-    }
-
-    const item = document.createElement("li");
-    item.className = `file-item file-item-${file.type}`;
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.title = file.path;
-    button.addEventListener("click", () => {
-      void openRemoteFile(file);
-    });
-    button.addEventListener("contextmenu", (event) => {
-      showFileContextMenu(event, file);
-    });
-    button.append(fileIcon(file), fileLabel(file.name), fileEditStatusBadge(file.path));
-
-    item.append(button);
-    return item;
-  }));
+  for (const file of sortFiles(files)) {
+    nodes.push(...renderFileTreeEntry(file, 0));
+  }
 
   fileTree.replaceChildren(...nodes);
 }
 
-function renderDirectoryItem(file: RemoteFile, isParent: boolean): HTMLLIElement {
+function renderParentDirectoryItem(file: RemoteFile): HTMLLIElement {
   const item = document.createElement("li");
-  item.className = "file-item file-item-directory";
+  item.className = "file-item file-item-directory file-item-parent";
 
   const button = document.createElement("button");
   button.type = "button";
   button.title = file.path;
-  button.append(fileIcon(file), fileLabel(file.name));
+  button.append(fileIcon(file), fileEntryContent(file));
   button.addEventListener("click", () => {
-    currentPath = file.path;
-    updateCwd(currentPath);
-    sendTerminalCd(file.path);
-    void refreshFiles(currentPath);
+    enterRemoteDirectory(file.path);
   });
   button.addEventListener("contextmenu", (event) => {
     showFileContextMenu(event, file);
   });
 
-  if (isParent) {
-    item.classList.add("file-item-parent");
-  }
-
   item.append(button);
   return item;
+}
+
+function renderFileTreeEntry(file: RemoteFile, depth: number): HTMLLIElement[] {
+  const item = document.createElement("li");
+  item.className = `file-item file-item-${file.type}`;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.title = file.path;
+  button.style.setProperty("--tree-depth", String(depth));
+  button.addEventListener("contextmenu", (event) => {
+    showFileContextMenu(event, file);
+  });
+
+  if (file.type === "directory") {
+    const expanded = expandedDirectories.has(file.path);
+    button.setAttribute("aria-expanded", String(expanded));
+    button.addEventListener("click", (event) => handleDirectoryClick(event, file));
+    button.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      cancelDirectoryClick(file.path);
+      enterRemoteDirectory(file.path);
+    });
+    attachDirectoryDropTarget(button, file.path);
+  } else {
+    button.addEventListener("click", () => {
+      terminal.focus();
+      void openRemoteFile(file);
+    });
+  }
+
+  button.append(fileIcon(file), fileEntryContent(file), fileEditStatusBadge(file.path));
+  item.append(button);
+  const nodes = [item];
+
+  if (file.type !== "directory" || !expandedDirectories.has(file.path)) {
+    return nodes;
+  }
+
+  if (loadingDirectories.has(file.path)) {
+    nodes.push(treeMessageItem("Loading...", depth + 1));
+    return nodes;
+  }
+
+  const children = directoryChildren.get(file.path) ?? [];
+
+  if (children.length === 0) {
+    nodes.push(treeMessageItem("Empty directory", depth + 1));
+    return nodes;
+  }
+
+  for (const child of sortFiles(children)) {
+    nodes.push(...renderFileTreeEntry(child, depth + 1));
+  }
+
+  return nodes;
+}
+
+function handleDirectoryClick(event: MouseEvent, file: RemoteFile): void {
+  if (event.detail > 1) {
+    return;
+  }
+
+  cancelDirectoryClick(file.path);
+  const timer = window.setTimeout(() => {
+    directoryClickTimers.delete(file.path);
+    void toggleDirectory(file.path);
+    terminal.focus();
+  }, 180);
+  directoryClickTimers.set(file.path, timer);
+}
+
+function cancelDirectoryClick(remotePath: string): void {
+  const timer = directoryClickTimers.get(remotePath);
+
+  if (timer !== undefined) {
+    window.clearTimeout(timer);
+    directoryClickTimers.delete(remotePath);
+  }
+}
+
+async function toggleDirectory(remotePath: string): Promise<void> {
+  if (expandedDirectories.delete(remotePath)) {
+    renderFiles(renderedFiles);
+    return;
+  }
+
+  expandedDirectories.add(remotePath);
+  loadingDirectories.add(remotePath);
+  renderFiles(renderedFiles);
+  await refreshDirectoryChildren(remotePath);
+}
+
+async function refreshDirectoryChildren(remotePath: string): Promise<void> {
+  try {
+    const children = await window.tetherTerm.readDirectory(remotePath);
+
+    if (expandedDirectories.has(remotePath)) {
+      directoryChildren.set(remotePath, children);
+    }
+  } catch (error) {
+    appendSessionLog(`Could not expand ${remotePath}: ${toErrorMessage(error)}`);
+  } finally {
+    loadingDirectories.delete(remotePath);
+    renderFiles(renderedFiles);
+  }
+}
+
+async function refreshExpandedDirectories(): Promise<void> {
+  await Promise.all([...expandedDirectories].map((remotePath) => refreshDirectoryChildren(remotePath)));
+}
+
+function clearExpandedDirectories(): void {
+  for (const timer of directoryClickTimers.values()) {
+    window.clearTimeout(timer);
+  }
+
+  directoryClickTimers.clear();
+  expandedDirectories.clear();
+  directoryChildren.clear();
+  loadingDirectories.clear();
+}
+
+function enterRemoteDirectory(remotePath: string): void {
+  currentPath = remotePath;
+  clearExpandedDirectories();
+  updateCwd(currentPath);
+  sendTerminalCd(remotePath);
+  void refreshFiles(currentPath);
+  terminal.focus();
+}
+
+function treeMessageItem(text: string, depth: number): HTMLLIElement {
+  const item = emptyItem(text);
+  item.classList.add("file-tree-message");
+  item.style.setProperty("--tree-depth", String(depth));
+  return item;
+}
+
+function sortFiles(files: RemoteFile[]): RemoteFile[] {
+  return [...files].sort((a, b) => {
+    if (a.type === "directory" && b.type !== "directory") return -1;
+    if (a.type !== "directory" && b.type === "directory") return 1;
+
+    let comparison = 0;
+
+    if (fileSortKey === "size") {
+      comparison = a.size - b.size;
+    } else if (fileSortKey === "date") {
+      comparison = (a.modifiedAt ?? 0) - (b.modifiedAt ?? 0);
+    } else {
+      comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+    }
+
+    if (comparison === 0 && fileSortKey !== "name") {
+      comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+    }
+
+    return fileSortAscending ? comparison : -comparison;
+  });
+}
+
+function updateSortDirectionButton(): void {
+  const direction = fileSortAscending ? "ascending" : "descending";
+  sortDirectionButton.textContent = fileSortAscending ? "↑" : "↓";
+  sortDirectionButton.title = `Sort ${direction}`;
+  sortDirectionButton.setAttribute("aria-label", `Sort ${direction}`);
+}
+
+function updateDirectorySummary(files: RemoteFile[]): void {
+  const fileCount = files.filter((file) => file.type === "file").length;
+  const folderCount = files.filter((file) => file.type === "directory").length;
+  const totalSize = files
+    .filter((file) => file.type === "file")
+    .reduce((total, file) => total + file.size, 0);
+  fileSummary.textContent = `${fileCount} file${fileCount === 1 ? "" : "s"} | ${folderCount} folder${folderCount === 1 ? "" : "s"} | Total ${formatBytes(totalSize)}`;
 }
 
 function createFileContextMenu(): HTMLDivElement {
@@ -537,6 +722,17 @@ function showFileContextMenu(event: MouseEvent, file: RemoteFile): void {
   });
 
   fileContextMenu.append(downloadButton);
+
+  if (file.type === "directory") {
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.textContent = "Open in terminal";
+    openButton.addEventListener("click", () => {
+      hideFileContextMenu();
+      enterRemoteDirectory(file.path);
+    });
+    fileContextMenu.prepend(openButton);
+  }
   fileContextMenu.style.left = `${event.clientX}px`;
   fileContextMenu.style.top = `${event.clientY}px`;
   fileContextMenu.hidden = false;
@@ -567,13 +763,94 @@ async function openRemoteFile(file: RemoteFile): Promise<void> {
   }
 
   appendSessionLog(`Opening ${file.path}...`);
+  terminal.focus();
   const result: FileOperationResult = await window.tetherTerm.openRemoteFile(file);
   setTransientStatus(result.message);
-  setFileActivity({ message: result.message, remotePath: file.path });
 
   if (!result.ok) {
+    setFileActivity({ message: result.message, remotePath: file.path });
     appendSessionLog(`Open failed: ${result.message}`);
   }
+}
+
+function attachDirectoryDropTarget(button: HTMLButtonElement, remotePath: string): void {
+  button.addEventListener("dragover", (event) => {
+    if (!hasDroppedFiles(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    button.classList.add("file-drop-target");
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+  });
+  button.addEventListener("dragleave", () => {
+    button.classList.remove("file-drop-target");
+  });
+  button.addEventListener("drop", (event) => {
+    button.classList.remove("file-drop-target");
+    event.stopPropagation();
+    void uploadDroppedItems(event, remotePath);
+  });
+}
+
+function handleFileTreeDragOver(event: DragEvent): void {
+  if (!connected || !hasDroppedFiles(event.dataTransfer)) {
+    return;
+  }
+
+  event.preventDefault();
+  fileTree.classList.add("file-tree-drop-target");
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = "copy";
+  }
+}
+
+function handleFileTreeDragLeave(event: DragEvent): void {
+  if (event.relatedTarget instanceof Node && fileTree.contains(event.relatedTarget)) {
+    return;
+  }
+
+  fileTree.classList.remove("file-tree-drop-target");
+}
+
+async function uploadDroppedItems(event: DragEvent, remotePath: string): Promise<void> {
+  event.preventDefault();
+  fileTree.classList.remove("file-tree-drop-target");
+
+  if (!connected || !event.dataTransfer) {
+    return;
+  }
+
+  const localPaths = Array.from(event.dataTransfer.files)
+    .map((file) => window.tetherTerm.getPathForFile(file))
+    .filter(Boolean);
+
+  if (localPaths.length === 0) {
+    setFileActivity({ message: "No local files found in the drop." });
+    return;
+  }
+
+  setFileActivity({ message: `Uploading to ${remotePath}...` });
+  const result = await window.tetherTerm.uploadLocalItems(localPaths, remotePath);
+  setFileActivity({ message: result.message });
+  setTransientStatus(result.message);
+
+  if (result.ok) {
+    if (remotePath === currentPath) {
+      await refreshFiles(currentPath, { showLoading: false });
+    } else if (expandedDirectories.has(remotePath)) {
+      await refreshDirectoryChildren(remotePath);
+    }
+  }
+
+  terminal.focus();
+}
+
+function hasDroppedFiles(dataTransfer: DataTransfer | null): boolean {
+  return Boolean(dataTransfer && Array.from(dataTransfer.types).includes("Files"));
 }
 
 function emptyItem(text: string): HTMLLIElement {
@@ -774,6 +1051,23 @@ function fileLabel(name: string): HTMLSpanElement {
   return label;
 }
 
+function fileEntryContent(file: RemoteFile): HTMLSpanElement {
+  const content = document.createElement("span");
+  content.className = "file-entry-content";
+  content.append(fileLabel(file.name));
+
+  if (file.name !== "..") {
+    const metadata = document.createElement("span");
+    metadata.className = "file-metadata";
+    const permissions = file.permissions ?? "----------";
+    const modified = file.modifiedAt ? formatLocalDateTime(file.modifiedAt) : "Unknown date";
+    metadata.textContent = `${permissions}  ${formatBytes(file.size)}  ${modified}`;
+    content.append(metadata);
+  }
+
+  return content;
+}
+
 function fileEditStatusBadge(remotePath: string): HTMLSpanElement {
   const badge = document.createElement("span");
   const status = fileEditStatuses.get(remotePath);
@@ -826,9 +1120,34 @@ function updateFileEditStatus(status: FileEditStatus): void {
 }
 
 function iconFor(file: RemoteFile): string {
-  if (file.type === "directory") return "▸";
+  if (file.type === "directory") return expandedDirectories.has(file.path) ? "▾" : "▸";
   if (file.type === "symlink") return "↪";
   return "•";
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1_024) {
+    return `${bytes} B`;
+  }
+
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1_024;
+  let unitIndex = 0;
+
+  while (value >= 1_024 && unitIndex < units.length - 1) {
+    value /= 1_024;
+    unitIndex += 1;
+  }
+
+  const digits = value >= 10 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function formatLocalDateTime(timestamp: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(new Date(timestamp));
 }
 
 function parentRemotePath(path: string): string {

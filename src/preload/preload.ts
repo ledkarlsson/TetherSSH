@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 interface ConnectionConfig {
   host: string;
@@ -29,6 +29,7 @@ interface RemoteFile {
   type: "directory" | "file" | "symlink" | "other";
   size: number;
   modifiedAt?: number;
+  permissions?: string;
 }
 
 interface FileOperationResult {
@@ -66,6 +67,7 @@ interface TetherTermApi {
   testTcpConnection(host: string, port: number): Promise<TcpTestResult>;
   readClipboardText(): Promise<string>;
   writeClipboardText(text: string): Promise<void>;
+  getPathForFile(file: File): string;
   connect(config: ConnectionConfig): Promise<ConnectResponse>;
   disconnect(): Promise<void>;
   sendTerminalInput(data: string): void;
@@ -73,6 +75,7 @@ interface TetherTermApi {
   readDirectory(path: string): Promise<RemoteFile[]>;
   downloadRemoteItem(file: RemoteFile): Promise<FileOperationResult>;
   openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
+  uploadLocalItems(localPaths: string[], remotePath: string): Promise<FileOperationResult>;
   onFileActivity(callback: (activity: FileActivity) => void): () => void;
   onFileEditStatus(callback: (status: FileEditStatus) => void): () => void;
   onTerminalData(callback: (data: string) => void): () => void;
@@ -99,6 +102,7 @@ const ipcChannels = {
   readDirectory: "sftp:read-directory",
   downloadRemoteItem: "sftp:download-remote-item",
   openRemoteFile: "sftp:open-remote-file",
+  uploadLocalItems: "sftp:upload-local-items",
   fileActivity: "file:activity",
   fileEditStatus: "file:edit-status",
   sessionLog: "session:log",
@@ -127,6 +131,10 @@ const api: TetherTermApi = {
     return ipcRenderer.invoke(ipcChannels.writeClipboardText, text);
   },
 
+  getPathForFile(file: File) {
+    return webUtils.getPathForFile(file);
+  },
+
   connect(config: ConnectionConfig) {
     return ipcRenderer.invoke(ipcChannels.connect, config);
   },
@@ -153,6 +161,10 @@ const api: TetherTermApi = {
 
   openRemoteFile(file: RemoteFile) {
     return ipcRenderer.invoke(ipcChannels.openRemoteFile, file);
+  },
+
+  uploadLocalItems(localPaths: string[], remotePath: string) {
+    return ipcRenderer.invoke(ipcChannels.uploadLocalItems, localPaths, remotePath);
   },
 
   onFileActivity(callback: (activity: FileActivity) => void) {
