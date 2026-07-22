@@ -2,8 +2,9 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Client, ClientChannel, ConnectConfig, SFTPWrapper } from "ssh2";
+import { AnyAuthMethod, AuthenticationType, Client, ClientChannel, ConnectConfig, SFTPWrapper } from "ssh2";
 import { ConnectResult, ConnectionConfig, RemoteFile, TerminalSize } from "../shared/ipc";
+import { HostKeyVerificationResult } from "./knownHostsStore";
 
 export interface DownloadSummary {
   files: number;
@@ -44,8 +45,12 @@ export class SshSession extends EventEmitter {
   private sftpUnavailableMessage?: string;
   private currentCwd = ".";
   private oscBuffer = "";
+  private lastAuthMethod?: AuthenticationType;
 
-  constructor(private readonly config: ConnectionConfig) {
+  constructor(
+    private readonly config: ConnectionConfig,
+    private readonly verifyHostKey: (key: Buffer) => Promise<HostKeyVerificationResult>
+  ) {
     super();
   }
 
@@ -75,7 +80,7 @@ export class SshSession extends EventEmitter {
 
       this.client
         .once("ready", () => {
-          this.log("SSH authenticated. Opening terminal shell...");
+          this.log(`SSH authenticated with ${authMethodLabel(this.lastAuthMethod)}. Opening terminal shell...`);
           this.openShell((result) => {
             settled = true;
             clearTimeout(timeout);
@@ -83,14 +88,6 @@ export class SshSession extends EventEmitter {
             resolve(result);
             this.openSftp();
           }, rejectBeforeShell);
-        })
-        .on("keyboard-interactive", (_name, _instructions, _language, prompts, finish) => {
-          this.log(`Server requested keyboard-interactive auth (${prompts.length} prompt(s)).`);
-          if (this.config.password) {
-            finish(prompts.map(() => this.config.password ?? ""));
-          } else {
-            finish([]);
-          }
         })
         .on("error", (error) => {
           rejectBeforeShell(error);
@@ -283,32 +280,111 @@ export class SshSession extends EventEmitter {
   }
 
   private toConnectConfig(): ConnectConfig {
+    const authMethods = this.createAuthenticationMethods();
+    let authIndex = 0;
     const connectConfig: ConnectConfig = {
       host: this.config.host,
       port: this.config.port,
       username: this.config.username,
       readyTimeout: 20_000,
-      tryKeyboard: Boolean(this.config.password)
+      hostVerifier: (key: Buffer, verify: (valid: boolean) => void) => {
+        void this.verifyHostKey(key)
+          .then((result) => {
+            if (result.status === "trusted") {
+              this.log(`Host key verified: ${result.fingerprint}`);
+            } else if (result.status === "accepted") {
+              this.log(`Host key accepted and saved to known_hosts: ${result.fingerprint}`);
+            } else if (result.status === "changed") {
+              this.log(`Host key changed and connection blocked: ${result.fingerprint}`);
+            } else {
+              this.log("Host key was not trusted. Connection cancelled.");
+            }
+
+            verify(result.accepted);
+          })
+          .catch((error) => {
+            this.log(`Host key verification failed: ${toErrorMessage(error)}`);
+            verify(false);
+          });
+      },
+      authHandler: (authsLeft, _partialSuccess, next) => {
+        while (authIndex < authMethods.length) {
+          const method = authMethods[authIndex++];
+
+          if (authsLeft && !authsLeft.includes(method.type)) {
+            continue;
+          }
+
+          this.lastAuthMethod = method.type;
+          this.log(`Trying ${authMethodLabel(method.type)} authentication...`);
+          next(method);
+          return;
+        }
+
+        next(false as unknown as AuthenticationType);
+      }
     };
 
-    if (this.config.password) {
-      this.log("Password auth available.");
-      connectConfig.password = this.config.password;
-    }
-
-    if (process.env.SSH_AUTH_SOCK) {
-      this.log("SSH agent auth available.");
-      connectConfig.agent = process.env.SSH_AUTH_SOCK;
-    }
-
-    const privateKey = this.config.password ? undefined : readDefaultPrivateKey();
-
-    if (privateKey) {
-      this.log(`Default private key auth available: ${privateKey.path}`);
-      connectConfig.privateKey = privateKey.content;
-    }
-
     return connectConfig;
+  }
+
+  private createAuthenticationMethods(): AnyAuthMethod[] {
+    const methods: AnyAuthMethod[] = [];
+    const username = this.config.username;
+    const mode = this.config.authMethod;
+    const passwordEnabled = mode === "auto" || mode === "password";
+    const keyEnabled = mode === "auto" || mode === "key";
+    const agentEnabled = mode === "auto" || mode === "agent";
+
+    if (passwordEnabled && this.config.password) {
+      methods.push({ type: "password", username, password: this.config.password });
+    }
+
+    if (keyEnabled) {
+      const privateKey = this.config.privateKeyPath
+        ? readPrivateKey(this.config.privateKeyPath)
+        : mode === "auto" ? readDefaultPrivateKey() : undefined;
+
+      if (privateKey) {
+        this.log(`Private key auth available: ${privateKey.path}`);
+        methods.push({
+          type: "publickey",
+          username,
+          key: privateKey.content,
+          passphrase: this.config.passphrase || undefined
+        });
+      } else if (mode === "key") {
+        throw new Error("Select a readable SSH private key before connecting.");
+      }
+    }
+
+    if (agentEnabled) {
+      const agent = this.config.agentSocket || defaultAgentSocket();
+
+      if (agent) {
+        this.log(`SSH agent auth available: ${agent}`);
+        methods.push({ type: "agent", username, agent });
+      } else if (mode === "agent") {
+        throw new Error("No SSH agent was found. Enter an agent socket or start an SSH agent.");
+      }
+    }
+
+    if (passwordEnabled && this.config.password) {
+      methods.push({
+        type: "keyboard-interactive",
+        username,
+        prompt: (_name, _instructions, _language, prompts, finish) => {
+          this.log(`Server requested keyboard-interactive auth (${prompts.length} prompt(s)).`);
+          finish(prompts.map(() => this.config.password ?? ""));
+        }
+      });
+    }
+
+    if (methods.length === 0) {
+      throw new Error("No usable authentication method is configured.");
+    }
+
+    return methods;
   }
 
   private openSftp(): void {
@@ -466,6 +542,10 @@ function keepPotentialOscPrefix(buffer: string): string {
 }
 
 function toUserFacingConnectionError(error: Error, _config: ConnectionConfig): Error {
+  if (/Host denied|verification failed/i.test(error.message)) {
+    return new Error("SSH host key verification failed. Check the host fingerprint and known_hosts entry.");
+  }
+
   if (isAuthenticationError(error)) {
     return new Error("Authentication failed. Check username, password, SSH agent, or key.");
   }
@@ -500,6 +580,28 @@ function readDefaultPrivateKey(): { path: string; content: Buffer } | undefined 
   }
 
   return undefined;
+}
+
+function readPrivateKey(keyPath: string): { path: string; content: Buffer } {
+  try {
+    return { path: keyPath, content: fs.readFileSync(keyPath) };
+  } catch {
+    throw new Error(`Could not read private key: ${keyPath}`);
+  }
+}
+
+function defaultAgentSocket(): string | undefined {
+  return process.env.SSH_AUTH_SOCK || (process.platform === "win32" ? "pageant" : undefined);
+}
+
+function authMethodLabel(method: AuthenticationType | undefined): string {
+  if (method === "publickey") return "private key";
+  if (method === "keyboard-interactive") return "keyboard-interactive";
+  return method ?? "SSH";
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function addDownloadSummary(target: DownloadSummary, addition: DownloadSummary): void {

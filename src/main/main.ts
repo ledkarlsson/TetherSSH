@@ -11,10 +11,17 @@ import {
   FileEditStatusKind,
   FileOperationResult,
   ipcChannels,
+  ProfileSecrets,
   RemoteFile,
   TerminalSize
 } from "../shared/ipc";
-import { loadConnectionProfile, saveConnectionProfile } from "./settingsStore";
+import {
+  deleteConnectionProfile,
+  listConnectionProfiles,
+  loadProfileSecrets,
+  saveConnectionProfile
+} from "./settingsStore";
+import { verifyHostKey } from "./knownHostsStore";
 
 let mainWindow: BrowserWindow | undefined;
 let session: SshSession | undefined;
@@ -75,12 +82,32 @@ app.on("window-all-closed", () => {
 });
 
 function registerIpcHandlers(): void {
-  ipcMain.handle(ipcChannels.loadConnectionProfile, async () => {
-    return loadConnectionProfile();
+  ipcMain.handle(ipcChannels.listConnectionProfiles, async () => {
+    return listConnectionProfiles();
   });
 
-  ipcMain.handle(ipcChannels.saveConnectionProfile, async (_event, profile) => {
-    await saveConnectionProfile(profile);
+  ipcMain.handle(ipcChannels.saveConnectionProfile, async (_event, profile, secrets: ProfileSecrets) => {
+    return saveConnectionProfile(profile, secrets);
+  });
+
+  ipcMain.handle(ipcChannels.deleteConnectionProfile, async (_event, profileId: string) => {
+    await deleteConnectionProfile(profileId);
+  });
+
+  ipcMain.handle(ipcChannels.loadProfileSecrets, async (_event, profileId: string) => {
+    return loadProfileSecrets(profileId);
+  });
+
+  ipcMain.handle(ipcChannels.selectPrivateKey, async () => {
+    const options: Electron.OpenDialogOptions = {
+      title: "Select SSH private key",
+      defaultPath: path.join(app.getPath("home"), ".ssh"),
+      properties: ["openFile"]
+    };
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled ? undefined : result.filePaths[0];
   });
 
   ipcMain.handle(ipcChannels.testTcpConnection, async (_event, host: string, port: number) => {
@@ -98,7 +125,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle(ipcChannels.connect, async (_event, config: ConnectionConfig): Promise<ConnectResponse> => {
     closeEditWatchers();
     session?.disconnect();
-    session = new SshSession(config);
+    session = new SshSession(config, (key) => verifyHostKey(mainWindow, config.host, config.port, key));
 
     session.on("data", (data) => {
       sendToRenderer(ipcChannels.terminalData, data);

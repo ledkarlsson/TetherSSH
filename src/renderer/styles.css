@@ -40,6 +40,7 @@ select {
   padding: 22px;
   border-right: 1px solid #26303a;
   background: #151a1f;
+  overflow: auto;
 }
 
 .connection-panel-toggle {
@@ -95,6 +96,58 @@ select {
   font-size: 13px;
 }
 
+.profile-toolbar {
+  display: grid;
+  gap: 7px;
+}
+
+.profile-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.profile-buttons button {
+  min-height: 30px;
+  padding-inline: 6px;
+  font-size: 12px;
+}
+
+.auth-field {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-field[hidden] {
+  display: none;
+}
+
+.connection-form .inline-checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+
+.inline-checkbox input {
+  width: 15px;
+  min-height: 15px;
+  margin: 0;
+  accent-color: #6ee7a8;
+}
+
+.path-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.path-input-row button {
+  min-height: 34px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
 .label-hint {
   color: #7f8ea3;
   font-size: 12px;
@@ -128,7 +181,8 @@ select {
   color: #f0a3a3;
 }
 
-input {
+input,
+.connection-form select {
   width: 100%;
   min-height: 34px;
   border: 1px solid #33404d;

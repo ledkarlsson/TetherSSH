@@ -1,14 +1,34 @@
+export type AuthenticationMethod = "auto" | "password" | "key" | "agent";
+
 export interface ConnectionConfig {
   host: string;
   port: number;
   username: string;
+  authMethod: AuthenticationMethod;
   password?: string;
+  privateKeyPath?: string;
+  passphrase?: string;
+  agentSocket?: string;
 }
 
 export interface ConnectionProfile {
+  id: string;
+  name: string;
   host: string;
   port: number;
   username: string;
+  authMethod: AuthenticationMethod;
+  privateKeyPath?: string;
+  agentSocket?: string;
+  favorite: boolean;
+  rememberPassword: boolean;
+  rememberPassphrase: boolean;
+  lastUsedAt: number;
+}
+
+export interface ProfileSecrets {
+  password?: string;
+  passphrase?: string;
 }
 
 export interface RemoteFile {
@@ -60,8 +80,11 @@ export type ConnectResponse =
   | { ok: false; message: string };
 
 export interface TetherTermApi {
-  loadConnectionProfile(): Promise<ConnectionProfile | undefined>;
-  saveConnectionProfile(profile: ConnectionProfile): Promise<void>;
+  listConnectionProfiles(): Promise<ConnectionProfile[]>;
+  saveConnectionProfile(profile: ConnectionProfile, secrets: ProfileSecrets): Promise<ConnectionProfile>;
+  deleteConnectionProfile(profileId: string): Promise<void>;
+  loadProfileSecrets(profileId: string): Promise<ProfileSecrets>;
+  selectPrivateKey(): Promise<string | undefined>;
   testTcpConnection(host: string, port: number): Promise<TcpTestResult>;
   readClipboardText(): Promise<string>;
   writeClipboardText(text: string): Promise<void>;
@@ -85,8 +108,11 @@ export interface TetherTermApi {
 }
 
 export const ipcChannels = {
-  loadConnectionProfile: "settings:load-connection-profile",
+  listConnectionProfiles: "settings:list-connection-profiles",
   saveConnectionProfile: "settings:save-connection-profile",
+  deleteConnectionProfile: "settings:delete-connection-profile",
+  loadProfileSecrets: "settings:load-profile-secrets",
+  selectPrivateKey: "settings:select-private-key",
   testTcpConnection: "network:test-tcp-connection",
   readClipboardText: "clipboard:read-text",
   writeClipboardText: "clipboard:write-text",

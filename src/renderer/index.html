@@ -30,6 +30,30 @@
         </header>
 
         <form id="connection-form" class="connection-form">
+          <div class="profile-toolbar">
+            <label>
+              Profile
+              <select id="profile-select">
+                <option value="">New connection</option>
+              </select>
+            </label>
+            <div class="profile-buttons">
+              <button id="new-profile" type="button">New</button>
+              <button id="save-profile" type="button">Save</button>
+              <button id="delete-profile" type="button" disabled>Delete</button>
+            </div>
+          </div>
+
+          <label>
+            Profile name
+            <input id="profile-name" name="profileName" autocomplete="off" placeholder="Production server" />
+          </label>
+
+          <label class="inline-checkbox">
+            <input id="favorite-profile" name="favorite" type="checkbox" />
+            Favorite
+          </label>
+
           <label>
             Connection
             <input id="target" name="target" autocomplete="off" required placeholder="user@hostname:22" />
@@ -38,9 +62,50 @@
           <div id="tcp-status" class="tcp-status tcp-status-idle">Enter user@hostname:port</div>
 
           <label>
+            Authentication
+            <select id="auth-method" name="authMethod">
+              <option value="auto">Auto</option>
+              <option value="password">Password</option>
+              <option value="key">Private key</option>
+              <option value="agent">SSH agent</option>
+            </select>
+          </label>
+
+          <div class="auth-field" data-auth-modes="auto,password">
+          <label>
             Password <span class="label-hint">optional</span>
             <input id="password" name="password" type="password" autocomplete="current-password" />
           </label>
+            <label class="inline-checkbox">
+              <input id="remember-password" name="rememberPassword" type="checkbox" />
+              Remember password securely
+            </label>
+          </div>
+
+          <div class="auth-field" data-auth-modes="auto,key">
+            <label>
+              Private key <span class="label-hint">optional in Auto</span>
+              <span class="path-input-row">
+                <input id="private-key-path" name="privateKeyPath" autocomplete="off" placeholder="Auto-detect from ~/.ssh" />
+                <button id="browse-private-key" type="button" title="Select SSH private key">Browse</button>
+              </span>
+            </label>
+            <label>
+              Key passphrase <span class="label-hint">optional</span>
+              <input id="passphrase" name="passphrase" type="password" autocomplete="off" />
+            </label>
+            <label class="inline-checkbox">
+              <input id="remember-passphrase" name="rememberPassphrase" type="checkbox" />
+              Remember passphrase securely
+            </label>
+          </div>
+
+          <div class="auth-field" data-auth-modes="auto,agent">
+            <label>
+              Agent socket <span class="label-hint">optional</span>
+              <input id="agent-socket" name="agentSocket" autocomplete="off" placeholder="SSH_AUTH_SOCK or Pageant" />
+            </label>
+          </div>
 
           <button id="connect-button" type="submit">Connect</button>
           <button id="disconnect-button" type="button" disabled>Disconnect</button>

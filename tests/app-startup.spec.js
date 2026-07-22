@@ -1,11 +1,13 @@
 const { _electron: electron, expect, test } = require("@playwright/test");
+const fs = require("node:fs");
 const path = require("node:path");
 
 test("starts the app without renderer errors", async () => {
   const appRoot = path.resolve(__dirname, "..");
   const app = await electron.launch({
     args: [appRoot],
-    cwd: appRoot
+    cwd: appRoot,
+    env: { ...process.env, TETHERSSH_TEST_TRUST_HOST_KEYS: "1" }
   });
 
   const errors = [];
@@ -37,11 +39,16 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#session-log")).toBeVisible();
     await expect(page.locator("#refresh-files")).toHaveCount(0);
     await expect(page.locator("fieldset")).toHaveCount(0);
-    await expect(page.locator("#privateKeyPath")).toHaveCount(0);
+    await expect(page.locator("#profile-select")).toBeVisible();
+    await expect(page.locator("#auth-method")).toHaveValue("auto");
+    await expect(page.locator("#private-key-path")).toBeVisible();
+    await expect(page.locator("#agent-socket")).toBeVisible();
 
     await page.locator("#target").fill("");
     await page.locator("#target").fill(target);
+    await page.locator("#profile-name").fill("Local test server");
     await page.locator("#password").fill(password);
+    await page.locator("#remember-password").check();
 
     await expect(page.locator("#target")).toHaveValue(target);
     await expect(page.locator("#password")).toHaveValue(password);
@@ -74,6 +81,15 @@ test("starts the app without renderer errors", async () => {
     await page.locator("#toggle-connection-panel").click();
     await expect(page.locator("body")).not.toHaveClass(/connection-panel-collapsed/);
     await expect(page.locator("#connection-form")).toBeVisible();
+    await expect(page.locator("#profile-select option", { hasText: "Local test server" })).toHaveCount(1);
+    await expect(page.locator("#session-log")).toContainText(/Host key (accepted|verified)/);
+    await expect(page.locator("#session-log")).toContainText("SSH authenticated with password");
+
+    const userDataPath = await app.evaluate(({ app }) => app.getPath("userData"));
+    const settingsContents = fs.readFileSync(path.join(userDataPath, "settings.json"), "utf8");
+    const knownHostsContents = fs.readFileSync(path.join(userDataPath, "known_hosts"), "utf8");
+    expect(settingsContents).not.toContain(password);
+    expect(knownHostsContents).toContain("[localhost]:2222");
 
     await expect(page.locator("#terminal")).not.toContainText("No such file or directory");
     await expect(page.locator("#terminal")).not.toContainText("file://%s%s");
@@ -171,7 +187,8 @@ test("shows a friendly authentication failure for a wrong password", async () =>
   const appRoot = path.resolve(__dirname, "..");
   const app = await electron.launch({
     args: [appRoot],
-    cwd: appRoot
+    cwd: appRoot,
+    env: { ...process.env, TETHERSSH_TEST_TRUST_HOST_KEYS: "1" }
   });
 
   const errors = [];
