@@ -31,6 +31,15 @@ export interface FileActivity {
   timestamp?: number;
 }
 
+export type FileEditStatusKind = "editing" | "closed" | "uploading" | "synced" | "failed" | "conflict";
+
+export interface FileEditStatus {
+  remotePath: string;
+  status: FileEditStatusKind;
+  message?: string;
+  timestamp?: number;
+}
+
 export interface TerminalSize {
   cols: number;
   rows: number;
@@ -63,6 +72,7 @@ export interface TetherTermApi {
   downloadRemoteItem(file: RemoteFile): Promise<FileOperationResult>;
   openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
   onFileActivity(callback: (activity: FileActivity) => void): () => void;
+  onFileEditStatus(callback: (status: FileEditStatus) => void): () => void;
   onTerminalData(callback: (data: string) => void): () => void;
   onRemoteCwd(callback: (path: string) => void): () => void;
   onSftpStatus(callback: (status: { available: boolean; message?: string }) => void): () => void;
@@ -88,6 +98,7 @@ export const ipcChannels = {
   downloadRemoteItem: "sftp:download-remote-item",
   openRemoteFile: "sftp:open-remote-file",
   fileActivity: "file:activity",
+  fileEditStatus: "file:edit-status",
   sessionLog: "session:log",
   sessionError: "session:error",
   sessionClosed: "session:closed"

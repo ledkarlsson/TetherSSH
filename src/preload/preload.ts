@@ -43,6 +43,15 @@ interface FileActivity {
   timestamp?: number;
 }
 
+type FileEditStatusKind = "editing" | "closed" | "uploading" | "synced" | "failed" | "conflict";
+
+interface FileEditStatus {
+  remotePath: string;
+  status: FileEditStatusKind;
+  message?: string;
+  timestamp?: number;
+}
+
 interface ConnectResult {
   cwd: string;
 }
@@ -65,6 +74,7 @@ interface TetherTermApi {
   downloadRemoteItem(file: RemoteFile): Promise<FileOperationResult>;
   openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
   onFileActivity(callback: (activity: FileActivity) => void): () => void;
+  onFileEditStatus(callback: (status: FileEditStatus) => void): () => void;
   onTerminalData(callback: (data: string) => void): () => void;
   onRemoteCwd(callback: (path: string) => void): () => void;
   onSftpStatus(callback: (status: { available: boolean; message?: string }) => void): () => void;
@@ -90,6 +100,7 @@ const ipcChannels = {
   downloadRemoteItem: "sftp:download-remote-item",
   openRemoteFile: "sftp:open-remote-file",
   fileActivity: "file:activity",
+  fileEditStatus: "file:edit-status",
   sessionLog: "session:log",
   sessionError: "session:error",
   sessionClosed: "session:closed"
@@ -146,6 +157,10 @@ const api: TetherTermApi = {
 
   onFileActivity(callback: (activity: FileActivity) => void) {
     return subscribe(ipcChannels.fileActivity, callback);
+  },
+
+  onFileEditStatus(callback: (status: FileEditStatus) => void) {
+    return subscribe(ipcChannels.fileEditStatus, callback);
   },
 
   onTerminalData(callback: (data: string) => void) {

@@ -10,6 +10,11 @@ export interface DownloadSummary {
   folders: number;
 }
 
+export interface RemoteFileStat {
+  size: number;
+  modifiedAt?: number;
+}
+
 type SessionEvents = {
   data: [string];
   cwd: [string];
@@ -188,6 +193,24 @@ export class SshSession extends EventEmitter {
         }
 
         resolve();
+      });
+    });
+  }
+
+  async stat(remotePath: string): Promise<RemoteFileStat> {
+    const sftp = await this.requireSftp();
+
+    return new Promise((resolve, reject) => {
+      sftp.stat(remotePath, (error, stats) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve({
+          size: stats.size,
+          modifiedAt: stats.mtime ? stats.mtime * 1000 : undefined
+        });
       });
     });
   }

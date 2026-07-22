@@ -70,6 +70,24 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#file-tree")).toContainText("projects");
     await expect(page.locator(".file-item-file button", { hasText: "README.txt" })).toBeEnabled();
 
+    const readmeStatus = page.locator(".file-item-file button", { hasText: "README.txt" }).locator(".file-edit-status");
+    const syncedAt = Date.now();
+    await app.evaluate(({ BrowserWindow }, payload) => {
+      BrowserWindow.getAllWindows()[0].webContents.send("file:edit-status", payload);
+    }, { remotePath: "/home/test/README.txt", status: "editing", message: "Editing README.txt." });
+    await expect(readmeStatus).toHaveText("editing");
+
+    await app.evaluate(({ BrowserWindow }, payload) => {
+      BrowserWindow.getAllWindows()[0].webContents.send("file:edit-status", payload);
+    }, { remotePath: "/home/test/README.txt", status: "synced", message: "Synced README.txt.", timestamp: syncedAt });
+    await expect(readmeStatus).toHaveText("editing, synced");
+    await expect(readmeStatus).toHaveAttribute("title", /Last synced:/);
+
+    await app.evaluate(({ BrowserWindow }, payload) => {
+      BrowserWindow.getAllWindows()[0].webContents.send("file:edit-status", payload);
+    }, { remotePath: "/home/test/README.txt", status: "closed", message: "Closed README.txt." });
+    await expect(readmeStatus).toHaveText("synced");
+
     await page.locator(".file-item-file button", { hasText: "README.txt" }).click({ button: "right" });
     await expect(page.locator(".file-context-menu")).toBeVisible();
     await expect(page.locator(".file-context-menu")).toContainText("Download");

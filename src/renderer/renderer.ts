@@ -49,6 +49,22 @@ interface FileActivity {
   timestamp?: number;
 }
 
+type FileEditStatusKind = "editing" | "closed" | "uploading" | "synced" | "failed" | "conflict";
+
+interface FileEditStatus {
+  remotePath: string;
+  status: FileEditStatusKind;
+  message?: string;
+  timestamp?: number;
+}
+
+interface FileEditViewState {
+  editing: boolean;
+  message?: string;
+  syncStatus?: Exclude<FileEditStatusKind, "editing" | "closed">;
+  syncedAt?: number;
+}
+
 const XTerm = (globalThis as unknown as {
   Terminal: new (options: Record<string, unknown>) => XTermTerminal;
 }).Terminal;
@@ -81,6 +97,8 @@ let lastClipboardShortcut = "";
 let lastClipboardShortcutAt = 0;
 let latestFileActivity: FileActivity | undefined;
 let fileActivityTimer: number | undefined;
+let renderedFiles: RemoteFile[] = [];
+const fileEditStatuses = new Map<string, FileEditViewState>();
 const fileContextMenu = createFileContextMenu();
 
 const terminal = new XTerm({
@@ -121,6 +139,7 @@ form.addEventListener("submit", async (event) => {
 async function connect(): Promise<void> {
   const config = readConnectionConfig();
   clearSessionLog();
+  clearFileEditStatuses();
   appendSessionLog("Connect requested.");
 
   if (!isValidConnectionConfig(config)) {
@@ -176,6 +195,7 @@ disconnectButton.addEventListener("click", async () => {
   resetTerminalTitle();
   setConnectionPanelCollapsed(false);
   setStatus("Disconnected");
+  clearFileEditStatuses();
 });
 
 toggleConnectionPanelButton.addEventListener("click", () => {
@@ -226,6 +246,14 @@ if (window.tetherTerm) {
     setFileActivity(activity);
   });
 
+  window.tetherTerm.onFileEditStatus((status) => {
+    updateFileEditStatus(status);
+
+    if (renderedFiles.length > 0) {
+      renderFiles(renderedFiles);
+    }
+  });
+
   window.tetherTerm.onSessionLog((message) => {
     appendSessionLog(message);
   });
@@ -246,6 +274,7 @@ if (window.tetherTerm) {
     resetTerminalTitle();
     setConnectionPanelCollapsed(false);
     setStatus("Disconnected");
+    clearFileEditStatuses();
     appendSessionLog("Session closed.");
   });
 } else {
@@ -405,6 +434,7 @@ async function refreshFiles(path: string, options: { showLoading?: boolean } = {
 }
 
 function renderFiles(files: RemoteFile[]): void {
+  renderedFiles = files;
   const nodes: HTMLLIElement[] = [];
 
   if (currentPath !== "/" && currentPath !== ".") {
@@ -443,7 +473,7 @@ function renderFiles(files: RemoteFile[]): void {
     button.addEventListener("contextmenu", (event) => {
       showFileContextMenu(event, file);
     });
-    button.append(fileIcon(file), fileLabel(file.name));
+    button.append(fileIcon(file), fileLabel(file.name), fileEditStatusBadge(file.path));
 
     item.append(button);
     return item;
@@ -569,6 +599,11 @@ function setFileActivity(activity: FileActivity): void {
   if (activity.timestamp) {
     fileActivityTimer = window.setInterval(renderFileActivity, 1_000);
   }
+}
+
+function clearFileEditStatuses(): void {
+  fileEditStatuses.clear();
+  renderedFiles = [];
 }
 
 function renderFileActivity(): void {
@@ -737,6 +772,57 @@ function fileLabel(name: string): HTMLSpanElement {
   label.className = "file-label";
   label.textContent = name;
   return label;
+}
+
+function fileEditStatusBadge(remotePath: string): HTMLSpanElement {
+  const badge = document.createElement("span");
+  const status = fileEditStatuses.get(remotePath);
+
+  if (!status) {
+    badge.className = "file-edit-status file-edit-status-empty";
+    badge.setAttribute("aria-hidden", "true");
+    return badge;
+  }
+
+  const labels = [status.editing ? "editing" : undefined, status.syncStatus].filter(Boolean);
+
+  if (labels.length === 0) {
+    badge.className = "file-edit-status file-edit-status-empty";
+    badge.setAttribute("aria-hidden", "true");
+    return badge;
+  }
+
+  badge.className = `file-edit-status file-edit-status-${status.syncStatus ?? "editing"}`;
+  badge.textContent = labels.join(", ");
+  badge.title = status.syncedAt
+    ? `Last synced: ${new Date(status.syncedAt).toLocaleString()}`
+    : status.message ?? labels.join(", ");
+  return badge;
+}
+
+function updateFileEditStatus(status: FileEditStatus): void {
+  const current = fileEditStatuses.get(status.remotePath) ?? { editing: false };
+
+  if (status.status === "editing") {
+    current.editing = true;
+    current.message = status.message;
+  } else if (status.status === "closed") {
+    current.editing = false;
+    current.message = status.message;
+  } else {
+    current.syncStatus = status.status;
+    current.message = status.message;
+
+    if (status.status === "synced" && status.timestamp) {
+      current.syncedAt = status.timestamp;
+    }
+  }
+
+  if (!current.editing && !current.syncStatus) {
+    fileEditStatuses.delete(status.remotePath);
+  } else {
+    fileEditStatuses.set(status.remotePath, current);
+  }
 }
 
 function iconFor(file: RemoteFile): string {

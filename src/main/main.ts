@@ -3,13 +3,34 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { DownloadSummary, SshSession } from "./sshSession";
-import { ConnectResponse, ConnectionConfig, FileOperationResult, ipcChannels, RemoteFile, TerminalSize } from "../shared/ipc";
+import { DownloadSummary, RemoteFileStat, SshSession } from "./sshSession";
+import {
+  ConnectResponse,
+  ConnectionConfig,
+  FileEditStatus,
+  FileEditStatusKind,
+  FileOperationResult,
+  ipcChannels,
+  RemoteFile,
+  TerminalSize
+} from "../shared/ipc";
 import { loadConnectionProfile, saveConnectionProfile } from "./settingsStore";
 
 let mainWindow: BrowserWindow | undefined;
 let session: SshSession | undefined;
-const editWatchers = new Map<string, { close(): void; uploadTimer?: NodeJS.Timeout }>();
+type EditWatcher = {
+  id: number;
+  close(): void;
+  editorClosed: boolean;
+  localPath: string;
+  remotePath: string;
+  remoteSnapshot: RemoteFileStat;
+  uploadPromise?: Promise<void>;
+  uploadTimer?: NodeJS.Timeout;
+};
+
+const editWatchers = new Map<string, EditWatcher>();
+let nextEditWatcherId = 1;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -169,9 +190,18 @@ function registerIpcHandlers(): void {
     try {
       const localPath = getEditCachePath(file.path);
       await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+      const remoteSnapshot = await session.stat(file.path);
       await session.downloadFile(file.path, localPath);
-      watchEditedFile(localPath, file.path);
-      await openLocalFile(localPath);
+      const watcherId = watchEditedFile(localPath, file.path, remoteSnapshot);
+      sendFileEditStatus(file.path, "editing", `Editing ${file.name}.`);
+
+      try {
+        await openLocalFile(localPath, () => finishEditing(file.path, watcherId));
+      } catch (error) {
+        finishEditing(file.path, watcherId);
+        throw error;
+      }
+
       sendToRenderer(ipcChannels.sessionLog, `Opened ${file.path} for editing.`);
       sendToRenderer(ipcChannels.fileActivity, { message: `Editing ${file.name}. Saves upload automatically.`, remotePath: file.path });
       return { ok: true, message: `Opened ${file.name}.`, localPath };
@@ -245,13 +275,19 @@ function sanitizeLocalName(name: string): string {
   return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
 }
 
-function watchEditedFile(localPath: string, remotePath: string): void {
-  editWatchers.get(remotePath)?.close();
+function watchEditedFile(localPath: string, remotePath: string, remoteSnapshot: RemoteFileStat): number {
+  const previous = editWatchers.get(remotePath);
+
+  if (previous) {
+    disposeEditWatcher(previous);
+  }
+
+  const id = nextEditWatcherId++;
 
   const watcher = fs.watch(localPath, () => {
     const existing = editWatchers.get(remotePath);
 
-    if (!existing) {
+    if (!existing || existing.id !== id || existing.editorClosed) {
       return;
     }
 
@@ -260,49 +296,145 @@ function watchEditedFile(localPath: string, remotePath: string): void {
     }
 
     existing.uploadTimer = setTimeout(() => {
-      void uploadEditedFile(localPath, remotePath);
+      existing.uploadTimer = undefined;
+      startWatcherUpload(existing);
     }, 600);
   });
 
   editWatchers.set(remotePath, {
+    id,
+    editorClosed: false,
+    localPath,
+    remotePath,
+    remoteSnapshot,
     close() {
       watcher.close();
     }
   });
+
+  return id;
 }
 
-async function uploadEditedFile(localPath: string, remotePath: string): Promise<void> {
+function finishEditing(remotePath: string, watcherId: number): void {
+  const watcher = editWatchers.get(remotePath);
+
+  if (!watcher || watcher.id !== watcherId || watcher.editorClosed) {
+    return;
+  }
+
+  watcher.editorClosed = true;
+  watcher.close();
+  sendFileEditStatus(remotePath, "closed", `Closed ${path.posix.basename(remotePath)}.`);
+
+  if (watcher.uploadTimer) {
+    clearTimeout(watcher.uploadTimer);
+    watcher.uploadTimer = undefined;
+    startWatcherUpload(watcher);
+    return;
+  }
+
+  removeClosedWatcherWhenIdle(watcher);
+}
+
+function startWatcherUpload(watcher: EditWatcher): void {
+  if (watcher.uploadPromise) {
+    return;
+  }
+
+  const uploadPromise = uploadEditedFile(watcher);
+  watcher.uploadPromise = uploadPromise;
+  void uploadPromise.finally(() => {
+    watcher.uploadPromise = undefined;
+    removeClosedWatcherWhenIdle(watcher);
+  });
+}
+
+function removeClosedWatcherWhenIdle(watcher: EditWatcher): void {
+  if (!watcher.editorClosed || watcher.uploadTimer || watcher.uploadPromise) {
+    return;
+  }
+
+  if (editWatchers.get(watcher.remotePath)?.id === watcher.id) {
+    editWatchers.delete(watcher.remotePath);
+  }
+}
+
+async function uploadEditedFile(watcher: EditWatcher): Promise<void> {
   if (!session) {
     return;
   }
 
+  if (editWatchers.get(watcher.remotePath)?.id !== watcher.id) {
+    return;
+  }
+
+  const { localPath, remotePath } = watcher;
+
   try {
+    sendFileEditStatus(remotePath, "uploading", `Uploading ${path.posix.basename(remotePath)}...`);
+    const remoteBeforeUpload = await session.stat(remotePath);
+
+    if (remoteChangedSinceSnapshot(remoteBeforeUpload, watcher.remoteSnapshot)) {
+      const message = `Conflict: ${path.posix.basename(remotePath)} changed on the server. Upload paused.`;
+      sendToRenderer(ipcChannels.sessionLog, message);
+      sendFileEditStatus(remotePath, "conflict", message);
+      sendToRenderer(ipcChannels.fileActivity, { message, remotePath });
+      return;
+    }
+
     await session.uploadFile(localPath, remotePath);
+    watcher.remoteSnapshot = await session.stat(remotePath);
     sendToRenderer(ipcChannels.sessionLog, `Uploaded saved changes to ${remotePath}`);
+    sendFileEditStatus(remotePath, "synced", `Synced ${path.posix.basename(remotePath)}.`, Date.now());
     sendToRenderer(ipcChannels.fileActivity, {
       message: `file: ${path.posix.basename(remotePath)} changed 0 seconds ago`,
       remotePath,
       timestamp: Date.now()
     });
   } catch (error) {
+    const message = `Upload failed for ${path.posix.basename(remotePath)}: ${toErrorMessage(error)}`;
     sendToRenderer(ipcChannels.sessionLog, `Upload failed for ${remotePath}: ${toErrorMessage(error)}`);
+    sendFileEditStatus(remotePath, "failed", message);
+    sendToRenderer(ipcChannels.fileActivity, { message, remotePath });
   }
+}
+
+function remoteChangedSinceSnapshot(current: RemoteFileStat, snapshot: RemoteFileStat): boolean {
+  const sizeChanged = current.size !== snapshot.size;
+  const currentModifiedAt = current.modifiedAt ?? 0;
+  const snapshotModifiedAt = snapshot.modifiedAt ?? 0;
+  const modifiedAtChanged = Math.abs(currentModifiedAt - snapshotModifiedAt) > 1_000;
+  return sizeChanged || modifiedAtChanged;
+}
+
+function sendFileEditStatus(
+  remotePath: string,
+  status: FileEditStatusKind,
+  message?: string,
+  timestamp?: number
+): void {
+  const payload: FileEditStatus = { remotePath, status, message, timestamp };
+  sendToRenderer(ipcChannels.fileEditStatus, payload);
 }
 
 function closeEditWatchers(): void {
   for (const watcher of editWatchers.values()) {
-    if (watcher.uploadTimer) {
-      clearTimeout(watcher.uploadTimer);
-    }
-
-    watcher.close();
+    disposeEditWatcher(watcher);
   }
 
   editWatchers.clear();
 }
 
-async function openLocalFile(localPath: string): Promise<void> {
-  if (await tryOpenWithCode(localPath)) {
+function disposeEditWatcher(watcher: EditWatcher): void {
+  if (watcher.uploadTimer) {
+    clearTimeout(watcher.uploadTimer);
+  }
+
+  watcher.close();
+}
+
+async function openLocalFile(localPath: string, onClosed: () => void): Promise<void> {
+  if (await tryOpenWithCode(localPath, onClosed)) {
     return;
   }
 
@@ -313,7 +445,7 @@ async function openLocalFile(localPath: string): Promise<void> {
   }
 }
 
-async function tryOpenWithCode(localPath: string): Promise<boolean> {
+async function tryOpenWithCode(localPath: string, onClosed: () => void): Promise<boolean> {
   const codeExecutable = await findCodeExecutable();
 
   if (!codeExecutable) {
@@ -321,15 +453,30 @@ async function tryOpenWithCode(localPath: string): Promise<boolean> {
   }
 
   return new Promise((resolve) => {
-    const child = spawn(codeExecutable, ["-g", localPath], {
-      detached: true,
+    const child = spawn(codeExecutable, ["--wait", "-g", localPath], {
       stdio: "ignore"
     });
+    let spawned = false;
+    let closed = false;
 
-    child.once("error", () => resolve(false));
+    child.once("error", () => {
+      if (spawned && !closed) {
+        closed = true;
+        onClosed();
+      }
+
+      resolve(false);
+    });
     child.once("spawn", () => {
+      spawned = true;
       child.unref();
       resolve(true);
+    });
+    child.once("close", () => {
+      if (spawned && !closed) {
+        closed = true;
+        onClosed();
+      }
     });
   });
 }
