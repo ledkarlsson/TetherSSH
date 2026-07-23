@@ -57,7 +57,7 @@ test("starts the app without renderer errors", async () => {
       };
     });
     expect(applicationMenu.labels).toEqual(["File", "Edit", "View", "Window", "Settings", "Help"]);
-    expect(applicationMenu.helpItems).toEqual(["About TetherSSH"]);
+    expect(applicationMenu.helpItems).toEqual(["About TetherSSH", "Export support bundle..."]);
     await app.evaluate(({ BrowserWindow }, channel) => {
       BrowserWindow.getAllWindows()[0].webContents.send(channel);
     }, "app:show-about");
@@ -68,6 +68,21 @@ test("starts the app without renderer errors", async () => {
       .toHaveText("Update checks are available in the installed version of TetherSSH.");
     await page.locator("#close-about-button").click();
     await expect(page.locator("#about-dialog")).toBeHidden();
+    const supportBundlePath = path.join(userDataDirectory, "support-bundle.json");
+    await app.evaluate(({ dialog, Menu }, destination) => {
+      dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: destination });
+      const exportItem = Menu.getApplicationMenu().items
+        .find((item) => item.label === "Help")
+        .submenu.items.find((item) => item.label === "Export support bundle...");
+      exportItem.click();
+    }, supportBundlePath);
+    await expect.poll(() => fs.existsSync(supportBundlePath)).toBe(true);
+    const supportBundle = JSON.parse(fs.readFileSync(supportBundlePath, "utf8"));
+    expect(supportBundle.formatVersion).toBe(1);
+    expect(supportBundle.exclusions).toContain("terminal input and output");
+    expect(JSON.stringify(supportBundle)).not.toContain("removed-key-folder");
+    expect(JSON.stringify(supportBundle)).not.toContain("localhost");
     await app.evaluate(({ BrowserWindow }, payload) => {
       BrowserWindow.getAllWindows()[0].webContents.send("app:update-available", payload);
     }, "0.2.0");
@@ -165,6 +180,12 @@ test("starts the app without renderer errors", async () => {
     expect(savedSettings.profiles[0]).not.toHaveProperty("privateKeyPath");
     expect(savedSettings.profiles[0]).not.toHaveProperty("agentSocket");
     expect(knownHostsContents).toContain("[localhost]:2222");
+    const diagnosticLogPath = path.join(userDataPath, "logs", "diagnostics.jsonl");
+    await expect.poll(() => fs.existsSync(diagnosticLogPath)).toBe(true);
+    const diagnosticContents = fs.readFileSync(diagnosticLogPath, "utf8");
+    expect(diagnosticContents).not.toContain(password);
+    expect(diagnosticContents).not.toContain("PASTE_ONCE");
+    expect(diagnosticContents).not.toContain(target);
 
     await expect(page.locator("#terminal")).not.toContainText("No such file or directory");
     await expect(page.locator("#terminal")).not.toContainText("file://%s%s");

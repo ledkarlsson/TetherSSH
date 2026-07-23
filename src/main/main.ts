@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from "ele
 import { autoUpdater } from "electron-updater";
 import fs from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { DownloadSummary, RemoteFileStat, SshSession } from "./sshSession";
@@ -19,6 +20,7 @@ import {
 } from "../shared/ipc";
 import {
   deleteConnectionProfile,
+  getSupportSettingsSummary,
   listConnectionProfiles,
   loadGlobalConnectionSettings,
   loadProfileSecrets,
@@ -27,6 +29,7 @@ import {
 } from "./settingsStore";
 import { verifyHostKey } from "./knownHostsStore";
 import { listPrivateKeys } from "./privateKeyStore";
+import { logDiagnostic, readDiagnosticEntries } from "./diagnostics";
 
 let mainWindow: BrowserWindow | undefined;
 let session: SshSession | undefined;
@@ -54,6 +57,9 @@ function createWindow(): void {
     minWidth: 960,
     minHeight: 640,
     title: `TetherSSH ${app.getVersion()}`,
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, "icon.png")
+      : path.join(__dirname, "../../build/icon.png"),
     backgroundColor: "#101316",
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
@@ -80,6 +86,12 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  void logDiagnostic("info", "app.ready", {
+    version: app.getVersion(),
+    packaged: app.isPackaged,
+    platform: process.platform,
+    arch: process.arch
+  });
   registerIpcHandlers();
   createApplicationMenu();
   createWindow();
@@ -148,12 +160,82 @@ function createApplicationMenu(): void {
         {
           label: "About TetherSSH",
           click: () => sendToRenderer(ipcChannels.showAbout)
+        },
+        {
+          label: "Export support bundle...",
+          click: () => {
+            void exportSupportBundle();
+          }
         }
       ]
     }
   ]);
 
   Menu.setApplicationMenu(menu);
+}
+
+async function exportSupportBundle(): Promise<void> {
+  const confirmationOptions: Electron.MessageBoxOptions = {
+    type: "info",
+    title: "Export support bundle",
+    message: "Create a sanitized support bundle?",
+    detail: "The bundle includes application, operating-system, settings-summary, and diagnostic event data. It excludes credentials, server addresses, usernames, local key paths, terminal input, and terminal output.",
+    buttons: ["Export", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  };
+  const confirmation = mainWindow
+    ? await dialog.showMessageBox(mainWindow, confirmationOptions)
+    : await dialog.showMessageBox(confirmationOptions);
+
+  if (confirmation.response !== 0) {
+    return;
+  }
+
+  const saveOptions: Electron.SaveDialogOptions = {
+    title: "Export TetherSSH support bundle",
+    defaultPath: path.join(
+      app.getPath("downloads"),
+      `TetherSSH-support-${new Date().toISOString().slice(0, 10)}.json`
+    ),
+    filters: [{ name: "JSON support bundle", extensions: ["json"] }]
+  };
+  const destination = mainWindow
+    ? await dialog.showSaveDialog(mainWindow, saveOptions)
+    : await dialog.showSaveDialog(saveOptions);
+
+  if (destination.canceled || !destination.filePath) {
+    return;
+  }
+
+  const bundle = {
+    formatVersion: 1,
+    exportedAt: new Date().toISOString(),
+    application: {
+      name: app.getName(),
+      version: app.getVersion(),
+      packaged: app.isPackaged
+    },
+    system: {
+      platform: process.platform,
+      release: os.release(),
+      arch: process.arch,
+      locale: app.getLocale()
+    },
+    settings: await getSupportSettingsSummary(),
+    diagnostics: await readDiagnosticEntries(),
+    exclusions: [
+      "credentials",
+      "server addresses",
+      "usernames",
+      "private key paths and contents",
+      "terminal input and output"
+    ]
+  };
+
+  await fs.promises.writeFile(destination.filePath, `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
+  await logDiagnostic("info", "support_bundle.exported");
 }
 
 function scheduleUpdateCheck(): void {
@@ -167,6 +249,7 @@ function scheduleUpdateCheck(): void {
 
   setTimeout(() => {
     void autoUpdater.checkForUpdates().catch((error) => {
+      void logDiagnostic("error", "update.check_failed", { error: toErrorMessage(error) });
       console.error("Could not check for updates:", error);
     });
   }, 3_000);
@@ -182,15 +265,18 @@ function configureUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on("update-available", (info) => {
+    void logDiagnostic("info", "update.available", { version: info.version });
     pendingAvailableVersion = info.version;
     sendToRenderer(ipcChannels.updateAvailable, info.version);
   });
 
   autoUpdater.on("update-downloaded", (info) => {
+    void logDiagnostic("info", "update.downloaded", { version: info.version });
     void promptToInstallUpdate(info.version);
   });
 
   autoUpdater.on("error", (error) => {
+    void logDiagnostic("error", "update.error", { error: error.message });
     console.error("Automatic update failed:", error);
   });
 }
@@ -326,6 +412,7 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(ipcChannels.connect, async (_event, config: ConnectionConfig): Promise<ConnectResponse> => {
+    void logDiagnostic("info", "session.connect_requested", { authMethod: config.authMethod });
     closeEditWatchers();
     session?.disconnect();
     session = new SshSession(config, (key) => verifyHostKey(mainWindow, config.host, config.port, key));
@@ -347,26 +434,31 @@ function registerIpcHandlers(): void {
     });
 
     session.on("error", (error) => {
+      void logDiagnostic("error", "session.error", { error: error.message });
       sendToRenderer(ipcChannels.sessionError, error.message);
     });
 
     session.on("close", () => {
+      void logDiagnostic("info", "session.closed");
       stopSystemStatusUpdates();
       sendToRenderer(ipcChannels.sessionClosed);
     });
 
     try {
       const result = await session.connect();
+      void logDiagnostic("info", "session.connected", { authMethod: config.authMethod });
       startSystemStatusUpdates();
       return { ok: true, result };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      void logDiagnostic("warn", "session.connect_failed", { error: message, authMethod: config.authMethod });
       session = undefined;
       return { ok: false, message };
     }
   });
 
   ipcMain.handle(ipcChannels.disconnect, async () => {
+    void logDiagnostic("info", "session.disconnect_requested");
     stopSystemStatusUpdates();
     closeEditWatchers();
     session?.disconnect();

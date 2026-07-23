@@ -21,6 +21,8 @@ jobs:
 
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -44,6 +46,17 @@ jobs:
 
       - name: Build Windows package
         run: npm run dist:win
+
+      - name: Verify Windows signatures
+        if: env.CSC_LINK != ''
+        shell: pwsh
+        run: |
+          $unsigned = Get-ChildItem release -Filter *.exe |
+            Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne "Valid" }
+          if ($unsigned) {
+            $unsigned | ForEach-Object { Write-Error "Invalid signature: $($_.FullName)" }
+            exit 1
+          }
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v6

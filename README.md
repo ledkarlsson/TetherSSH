@@ -42,6 +42,32 @@ Each push to `main` or `master` creates a release versioned as
 executable does not support automatic updates; use the setup executable for an
 updatable installation.
 
+## Diagnostics and support bundles
+
+TetherSSH writes structured JSON Lines diagnostics to
+`logs/diagnostics.jsonl` under Electron's per-user application data folder.
+Events describe application lifecycle, update state, and connection outcomes.
+Terminal input/output and sensitive connection fields are never written to the
+diagnostic log.
+
+Use **Help → Export support bundle...** to explicitly create a sanitized JSON
+support bundle. Before choosing a destination, the app lists what is included
+and excluded. Bundles contain app/system metadata, aggregate settings counts,
+and recent structured events. They exclude credentials, server addresses,
+usernames, private-key paths/contents, and terminal contents.
+
+## Windows code signing
+
+Windows CI signs the setup and portable executables when these repository
+secrets are configured:
+
+- `WINDOWS_CSC_LINK`: base64-encoded PFX certificate or supported certificate URL
+- `WINDOWS_CSC_KEY_PASSWORD`: PFX password
+
+When signing is configured, CI verifies every generated `.exe` with
+`Get-AuthenticodeSignature` before publishing it. Builds without signing
+secrets remain available for pull requests and development.
+
 ## SSH Test Container
 
 Start a local SSH/SFTP test server:
@@ -79,7 +105,7 @@ docker compose -f docker-compose.ssh-test.yml down
 - Server keys are verified before authentication. First connections show an SHA-256 fingerprint, accepted keys are stored in TetherSSH's `known_hosts` file, and changed keys are blocked.
 - Connection profiles support favorites and recent-use ordering. Passwords and key passphrases are optional and are never stored as plain text.
 - Remembered secrets use Electron `safeStorage`: Windows DPAPI on Windows and Secret Service/KWallet on Linux. Linux's insecure `basic_text` fallback is rejected.
-- Authentication can use automatic discovery, password/keyboard-interactive, an explicitly selected private key with passphrase, or a selected SSH agent socket/Pageant.
+- Authentication can use automatic discovery, password/keyboard-interactive, every detected private key in the global key folder with an optional passphrase, or a configured SSH agent socket/Pageant.
 
 ## Prioritized Roadmap
 
@@ -120,3 +146,4 @@ The next milestone is to make TetherSSH safe and dependable enough for daily use
 
 12. [ ] **Release hardening**
     Add application icons, code signing, structured diagnostic logs, and an opt-in way to export a support bundle without credentials or terminal contents. Automatic updates and release notes are now included in the Windows release workflow.
+    Icons, sanitized diagnostics, support export, and conditional signing/verification are implemented. Add the production certificate secrets documented above before marking this complete.

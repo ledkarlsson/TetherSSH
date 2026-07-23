@@ -22,6 +22,15 @@ interface SettingsFile {
   connectionSettings?: GlobalConnectionSettings;
 }
 
+export interface SupportSettingsSummary {
+  profileCount: number;
+  favoriteProfileCount: number;
+  rememberedPasswordCount: number;
+  rememberedPassphraseCount: number;
+  customPrivateKeyDirectoryConfigured: boolean;
+  customAgentSocketConfigured: boolean;
+}
+
 function settingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
 }
@@ -134,6 +143,21 @@ export async function saveGlobalConnectionSettings(
   settings.connectionSettings = normalized;
   await writeSettings(settings);
   return normalized;
+}
+
+export async function getSupportSettingsSummary(): Promise<SupportSettingsSummary> {
+  const settings = await readSettings();
+  const profiles = normalizeProfiles(settings);
+  const connectionSettings = await loadGlobalConnectionSettings();
+
+  return {
+    profileCount: profiles.length,
+    favoriteProfileCount: profiles.filter((profile) => profile.favorite).length,
+    rememberedPasswordCount: profiles.filter((profile) => profile.rememberPassword).length,
+    rememberedPassphraseCount: profiles.filter((profile) => profile.rememberPassphrase).length,
+    customPrivateKeyDirectoryConfigured: Boolean(connectionSettings.privateKeyDirectory),
+    customAgentSocketConfigured: Boolean(connectionSettings.agentSocket)
+  };
 }
 
 async function readSettings(): Promise<SettingsFile> {
