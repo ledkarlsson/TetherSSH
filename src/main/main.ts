@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
+import { autoUpdater } from "electron-updater";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -65,6 +66,7 @@ function createWindow(): void {
 app.whenReady().then(() => {
   registerIpcHandlers();
   createWindow();
+  scheduleUpdateCheck();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -72,6 +74,51 @@ app.whenReady().then(() => {
     }
   });
 });
+
+function scheduleUpdateCheck(): void {
+  // electron-updater requires the installed NSIS build and its generated
+  // app-update.yml. Development and portable builds must not contact GitHub.
+  if (!app.isPackaged || process.env.PORTABLE_EXECUTABLE_DIR) {
+    return;
+  }
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-downloaded", (info) => {
+    void promptToInstallUpdate(info.version);
+  });
+
+  autoUpdater.on("error", (error) => {
+    console.error("Automatic update failed:", error);
+  });
+
+  setTimeout(() => {
+    void autoUpdater.checkForUpdates().catch((error) => {
+      console.error("Could not check for updates:", error);
+    });
+  }, 3_000);
+}
+
+async function promptToInstallUpdate(version: string): Promise<void> {
+  const options: Electron.MessageBoxOptions = {
+    type: "info",
+    title: "TetherSSH update ready",
+    message: `TetherSSH ${version} has been downloaded.`,
+    detail: "Restart now to install the update. Any active SSH session will be disconnected.",
+    buttons: ["Restart and install", "Later"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  };
+  const result = mainWindow
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options);
+
+  if (result.response === 0) {
+    autoUpdater.quitAndInstall();
+  }
+}
 
 app.on("window-all-closed", () => {
   closeEditWatchers();

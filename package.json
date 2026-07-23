@@ -2,6 +2,10 @@
   "name": "tetherssh",
   "version": "0.1.0",
   "description": "A cross-platform SSH client with a synchronized remote file tree.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ledkarlsson/TetherSSH.git"
+  },
   "main": "dist/main/main.js",
   "scripts": {
     "clean": "rimraf dist",
@@ -25,6 +29,7 @@
   },
   "dependencies": {
     "@xterm/xterm": "^5.5.0",
+    "electron-updater": "^6.8.9",
     "ssh2": "^1.16.0"
   },
   "devDependencies": {
@@ -42,6 +47,13 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ledkarlsson",
+        "repo": "TetherSSH"
+      }
+    ],
     "files": [
       "dist/**/*",
       "package.json"
