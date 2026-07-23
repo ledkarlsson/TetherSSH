@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from "electron";
 import { autoUpdater } from "electron-updater";
 import fs from "node:fs";
 import net from "node:net";
@@ -67,6 +67,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   registerIpcHandlers();
+  createApplicationMenu();
   createWindow();
   scheduleUpdateCheck();
 
@@ -76,6 +77,26 @@ app.whenReady().then(() => {
     }
   });
 });
+
+function createApplicationMenu(): void {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "Help",
+      submenu: [
+        {
+          label: "About TetherSSH",
+          click: () => sendToRenderer(ipcChannels.showAbout)
+        },
+        {
+          label: "Check for new updates",
+          click: () => sendToRenderer(ipcChannels.requestUpdateCheck)
+        }
+      ]
+    }
+  ]);
+
+  Menu.setApplicationMenu(menu);
+}
 
 function scheduleUpdateCheck(): void {
   // electron-updater requires the installed NSIS build and its generated

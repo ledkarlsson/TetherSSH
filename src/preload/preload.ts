@@ -123,6 +123,8 @@ interface TetherTermApi {
   downloadRemoteItem(file: RemoteFile): Promise<FileOperationResult>;
   openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
   uploadLocalItems(localPaths: string[], remotePath: string): Promise<FileOperationResult>;
+  onShowAbout(callback: () => void): () => void;
+  onCheckForUpdates(callback: () => void): () => void;
   onFileActivity(callback: (activity: FileActivity) => void): () => void;
   onFileEditStatus(callback: (status: FileEditStatus) => void): () => void;
   onTerminalData(callback: (data: string) => void): () => void;
@@ -136,6 +138,8 @@ interface TetherTermApi {
 const ipcChannels = {
   getAppInfo: "app:get-info",
   checkForUpdates: "app:check-for-updates",
+  showAbout: "app:show-about",
+  requestUpdateCheck: "app:request-update-check",
   listConnectionProfiles: "settings:list-connection-profiles",
   saveConnectionProfile: "settings:save-connection-profile",
   deleteConnectionProfile: "settings:delete-connection-profile",
@@ -242,6 +246,14 @@ const api: TetherTermApi = {
 
   uploadLocalItems(localPaths: string[], remotePath: string) {
     return ipcRenderer.invoke(ipcChannels.uploadLocalItems, localPaths, remotePath);
+  },
+
+  onShowAbout(callback: () => void) {
+    return subscribe(ipcChannels.showAbout, callback);
+  },
+
+  onCheckForUpdates(callback: () => void) {
+    return subscribe(ipcChannels.requestUpdateCheck, callback);
   },
 
   onFileActivity(callback: (activity: FileActivity) => void) {

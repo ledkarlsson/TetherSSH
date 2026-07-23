@@ -149,8 +149,6 @@ const fileStatus = requireElement<HTMLDivElement>("#file-status");
 const fileSummary = requireElement<HTMLDivElement>("#file-summary");
 const fileSort = requireElement<HTMLSelectElement>("#file-sort");
 const sortDirectionButton = requireElement<HTMLButtonElement>("#sort-direction");
-const aboutButton = requireElement<HTMLButtonElement>("#about-button");
-const checkUpdatesButton = requireElement<HTMLButtonElement>("#check-updates-button");
 const aboutDialog = requireElement<HTMLDialogElement>("#about-dialog");
 const appVersion = requireElement<HTMLElement>("#app-version");
 const updateStatus = requireElement<HTMLDivElement>("#update-status");
@@ -208,10 +206,10 @@ terminalElement.addEventListener("keydown", (event) => {
 
 void loadConnectionProfiles();
 
-aboutButton.addEventListener("click", () => {
+window.tetherTerm.onShowAbout(() => {
   void showAboutDialog();
 });
-checkUpdatesButton.addEventListener("click", () => {
+window.tetherTerm.onCheckForUpdates(() => {
   void runUpdateCheck(true);
 });
 dialogCheckUpdatesButton.addEventListener("click", () => {
@@ -279,7 +277,6 @@ async function runUpdateCheck(openDialog: boolean): Promise<void> {
     await showAboutDialog();
   }
 
-  checkUpdatesButton.disabled = true;
   dialogCheckUpdatesButton.disabled = true;
   updateStatus.textContent = "Checking for updates...";
   updateStatus.dataset.status = "checking";
@@ -289,7 +286,6 @@ async function runUpdateCheck(openDialog: boolean): Promise<void> {
     updateStatus.textContent = result.message;
     updateStatus.dataset.status = result.status;
   } finally {
-    checkUpdatesButton.disabled = false;
     dialogCheckUpdatesButton.disabled = false;
   }
 }

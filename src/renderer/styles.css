@@ -81,18 +81,6 @@ select {
   line-height: 1.4;
 }
 
-.app-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.6fr);
-  gap: 7px;
-}
-
-.app-actions button {
-  min-height: 30px;
-  padding-inline: 7px;
-  font-size: 12px;
-}
-
 .about-dialog {
   width: min(440px, calc(100vw - 40px));
   border: 1px solid #3b4858;

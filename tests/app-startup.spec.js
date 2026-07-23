@@ -37,9 +37,15 @@ test("starts the app without renderer errors", async () => {
   try {
     await expect(page.locator("h1")).toHaveText("TetherSSH");
     await expect(page.locator("#connection-form")).toBeVisible();
-    await expect(page.locator("#about-button")).toBeVisible();
-    await expect(page.locator("#check-updates-button")).toBeVisible();
-    await page.locator("#about-button").click();
+    const helpMenuItems = await app.evaluate(({ Menu }) => {
+      return Menu.getApplicationMenu().items
+        .find((item) => item.label === "Help")
+        .submenu.items.map((item) => item.label);
+    });
+    expect(helpMenuItems).toEqual(["About TetherSSH", "Check for new updates"]);
+    await app.evaluate(({ BrowserWindow }, channel) => {
+      BrowserWindow.getAllWindows()[0].webContents.send(channel);
+    }, "app:show-about");
     await expect(page.locator("#about-dialog")).toBeVisible();
     await expect(page.locator("#app-version")).toHaveText("0.1.0");
     await page.locator("#dialog-check-updates-button").click();
