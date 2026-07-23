@@ -6,12 +6,18 @@ const path = require("node:path");
 test("starts the app without renderer errors", async () => {
   const appRoot = path.resolve(__dirname, "..");
   const keyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "tetherssh-keys-"));
+  const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "tetherssh-user-data-"));
+  fs.writeFileSync(path.join(userDataDirectory, "settings.json"), JSON.stringify({
+    connectionSettings: {
+      privateKeyDirectory: path.join(userDataDirectory, "removed-key-folder")
+    }
+  }));
   fs.writeFileSync(path.join(keyDirectory, "id_alpha"), "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n");
   fs.writeFileSync(path.join(keyDirectory, "work-key.ppk"), "PuTTY-User-Key-File-3: ssh-ed25519\n");
   fs.writeFileSync(path.join(keyDirectory, "id_alpha.pub"), "ssh-ed25519 public-key\n");
   fs.writeFileSync(path.join(keyDirectory, "notes.txt"), "not a private key\n");
   const app = await electron.launch({
-    args: [appRoot],
+    args: [appRoot, `--user-data-dir=${userDataDirectory}`],
     cwd: appRoot,
     env: { ...process.env, TETHERSSH_TEST_TRUST_HOST_KEYS: "1" }
   });
@@ -87,6 +93,7 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#connection-settings-dialog")).toBeVisible();
     await expect(page.locator("#private-key-directory")).toBeVisible();
     await expect(page.locator("#agent-socket")).toBeVisible();
+    await expect(page.locator("#private-key-directory")).toHaveValue(path.join(os.homedir(), ".ssh"));
 
     await page.locator("#private-key-directory").fill(keyDirectory);
     await page.locator("#private-key-directory").dispatchEvent("change");
@@ -256,13 +263,15 @@ test("starts the app without renderer errors", async () => {
   } finally {
     await app.close();
     fs.rmSync(keyDirectory, { recursive: true, force: true });
+    fs.rmSync(userDataDirectory, { recursive: true, force: true });
   }
 });
 
 test("shows a friendly authentication failure for a wrong password", async () => {
   const appRoot = path.resolve(__dirname, "..");
+  const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "tetherssh-user-data-"));
   const app = await electron.launch({
-    args: [appRoot],
+    args: [appRoot, `--user-data-dir=${userDataDirectory}`],
     cwd: appRoot,
     env: { ...process.env, TETHERSSH_TEST_TRUST_HOST_KEYS: "1" }
   });
@@ -294,5 +303,6 @@ test("shows a friendly authentication failure for a wrong password", async () =>
     await expect(errors).toEqual([]);
   } finally {
     await app.close();
+    fs.rmSync(userDataDirectory, { recursive: true, force: true });
   }
 });

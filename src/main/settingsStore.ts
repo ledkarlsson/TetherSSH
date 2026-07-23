@@ -107,16 +107,23 @@ export async function loadProfileSecrets(profileId: string): Promise<ProfileSecr
 
 export async function loadGlobalConnectionSettings(): Promise<GlobalConnectionSettings> {
   const settings = await readSettings();
+  const stored = settings.connectionSettings
+    ?? (() => {
+      const legacyProfile = settings.profiles?.find((profile) => profile.privateKeyDirectory || profile.agentSocket);
+      return {
+        privateKeyDirectory: legacyProfile?.privateKeyDirectory,
+        agentSocket: legacyProfile?.agentSocket
+      };
+    })();
+  const normalized = normalizeGlobalConnectionSettings(stored);
 
-  if (settings.connectionSettings) {
-    return normalizeGlobalConnectionSettings(settings.connectionSettings);
+  if (normalized.privateKeyDirectory && !(await directoryExists(normalized.privateKeyDirectory))) {
+    normalized.privateKeyDirectory = path.join(app.getPath("home"), ".ssh");
+    settings.connectionSettings = normalized;
+    await writeSettings(settings);
   }
 
-  const legacyProfile = settings.profiles?.find((profile) => profile.privateKeyDirectory || profile.agentSocket);
-  return normalizeGlobalConnectionSettings({
-    privateKeyDirectory: legacyProfile?.privateKeyDirectory,
-    agentSocket: legacyProfile?.agentSocket
-  });
+  return normalized;
 }
 
 export async function saveGlobalConnectionSettings(
@@ -194,6 +201,14 @@ function normalizeGlobalConnectionSettings(settings: GlobalConnectionSettings): 
     privateKeyDirectory: settings.privateKeyDirectory?.trim() || undefined,
     agentSocket: settings.agentSocket?.trim() || undefined
   };
+}
+
+async function directoryExists(directory: string): Promise<boolean> {
+  try {
+    return (await fs.stat(directory)).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 function sameProfileIdentity(a: ConnectionProfile, b: ConnectionProfile): boolean {
