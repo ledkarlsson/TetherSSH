@@ -35,7 +35,7 @@ test("starts the app without renderer errors", async () => {
   const target = `${user}@${server}:${port}`;
 
   try {
-    await expect(page.locator("h1")).toHaveText("TetherSSH");
+    await expect(page.locator(".connection-panel > header")).toHaveCount(0);
     await expect.poll(() => app.evaluate(({ BrowserWindow }) => {
       return BrowserWindow.getAllWindows()[0].getTitle();
     })).toBe("TetherSSH 0.1.0");
@@ -50,13 +50,14 @@ test("starts the app without renderer errors", async () => {
           .submenu.items.map((item) => item.label)
       };
     });
-    expect(applicationMenu.labels).toEqual(["File", "Edit", "View", "Window", "Help"]);
+    expect(applicationMenu.labels).toEqual(["File", "Edit", "View", "Window", "Settings", "Help"]);
     expect(applicationMenu.helpItems).toEqual(["About TetherSSH"]);
     await app.evaluate(({ BrowserWindow }, channel) => {
       BrowserWindow.getAllWindows()[0].webContents.send(channel);
     }, "app:show-about");
     await expect(page.locator("#about-dialog")).toBeVisible();
     await expect(page.locator("#app-version")).toHaveText("0.1.0");
+    await expect(page.locator("#about-dialog")).toContainText("Daniel Karlsson");
     await expect(page.locator("#update-status"))
       .toHaveText("Update checks are available in the installed version of TetherSSH.");
     await page.locator("#close-about-button").click();
@@ -73,6 +74,10 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#profile-select")).toBeVisible();
     await expect(page.locator("#auth-method")).toHaveValue("auto");
     await expect(page.locator("#private-key-path")).toBeVisible();
+    await app.evaluate(({ BrowserWindow }, channel) => {
+      BrowserWindow.getAllWindows()[0].webContents.send(channel);
+    }, "app:show-connection-settings");
+    await expect(page.locator("#connection-settings-dialog")).toBeVisible();
     await expect(page.locator("#private-key-directory")).toBeVisible();
     await expect(page.locator("#agent-socket")).toBeVisible();
 
@@ -86,6 +91,8 @@ test("starts the app without renderer errors", async () => {
     ]);
     await expect(page.locator("#private-key-path option", { hasText: "id_alpha.pub" })).toHaveCount(0);
     await expect(page.locator("#private-key-path option", { hasText: "notes.txt" })).toHaveCount(0);
+    await page.locator("#save-connection-settings").click();
+    await expect(page.locator("#connection-settings-dialog")).toBeHidden();
 
     await page.locator("#target").fill("");
     await page.locator("#target").fill(target);
@@ -135,8 +142,12 @@ test("starts the app without renderer errors", async () => {
 
     const userDataPath = await app.evaluate(({ app }) => app.getPath("userData"));
     const settingsContents = fs.readFileSync(path.join(userDataPath, "settings.json"), "utf8");
+    const savedSettings = JSON.parse(settingsContents);
     const knownHostsContents = fs.readFileSync(path.join(userDataPath, "known_hosts"), "utf8");
     expect(settingsContents).not.toContain(password);
+    expect(savedSettings.connectionSettings.privateKeyDirectory).toBe(keyDirectory);
+    expect(savedSettings.profiles[0]).not.toHaveProperty("privateKeyDirectory");
+    expect(savedSettings.profiles[0]).not.toHaveProperty("agentSocket");
     expect(knownHostsContents).toContain("[localhost]:2222");
 
     await expect(page.locator("#terminal")).not.toContainText("No such file or directory");

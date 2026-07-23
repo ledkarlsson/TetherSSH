@@ -24,11 +24,6 @@
           TetherSSH
         </button>
 
-        <header>
-          <h1>TetherSSH</h1>
-          <p>Terminal and remote files, tied to one SSH session.</p>
-        </header>
-
         <form id="connection-form" class="connection-form">
           <div class="profile-toolbar">
             <label>
@@ -84,13 +79,6 @@
 
           <div class="auth-field" data-auth-modes="auto,key">
             <label>
-              Private key folder
-              <span class="path-input-row">
-                <input id="private-key-directory" name="privateKeyDirectory" autocomplete="off" placeholder="Default: ~/.ssh" />
-                <button id="browse-private-key-directory" type="button" title="Select SSH private key folder">Browse</button>
-              </span>
-            </label>
-            <label>
               Private key <span class="label-hint">optional in Auto</span>
               <select id="private-key-path" name="privateKeyPath">
                 <option value="">No private keys found</option>
@@ -104,13 +92,6 @@
             <label class="inline-checkbox">
               <input id="remember-passphrase" name="rememberPassphrase" type="checkbox" />
               Remember passphrase securely
-            </label>
-          </div>
-
-          <div class="auth-field" data-auth-modes="auto,agent">
-            <label>
-              Agent socket <span class="label-hint">optional</span>
-              <input id="agent-socket" name="agentSocket" autocomplete="off" placeholder="SSH_AUTH_SOCK or Pageant" />
             </label>
           </div>
 
@@ -181,12 +162,35 @@
       <div class="about-dialog-content">
         <h2 id="about-title">About TetherSSH</h2>
         <p>Terminal and remote files, tied to one SSH session.</p>
+        <p>Daniel Karlsson</p>
         <p class="about-version">Version <strong id="app-version">—</strong></p>
         <div id="update-status" class="update-status" aria-live="polite"></div>
         <div class="about-dialog-actions">
           <button id="close-about-button" type="button">Close</button>
         </div>
       </div>
+    </dialog>
+
+    <dialog id="connection-settings-dialog" class="about-dialog" aria-labelledby="connection-settings-title">
+      <form id="connection-settings-form" class="about-dialog-content">
+        <h2 id="connection-settings-title">Connection settings</h2>
+        <p>These settings are shared by all connection profiles.</p>
+        <label>
+          Private key folder
+          <span class="path-input-row">
+            <input id="private-key-directory" autocomplete="off" placeholder="Default: ~/.ssh" />
+            <button id="browse-private-key-directory" type="button">Browse</button>
+          </span>
+        </label>
+        <label>
+          SSH agent socket
+          <input id="agent-socket" autocomplete="off" placeholder="SSH_AUTH_SOCK or Pageant" />
+        </label>
+        <div class="about-dialog-actions">
+          <button id="save-connection-settings" type="submit">Save</button>
+          <button id="close-connection-settings" type="button">Cancel</button>
+        </div>
+      </form>
     </dialog>
 
     <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>

@@ -34,6 +34,11 @@ interface ProfileSecrets {
   passphrase?: string;
 }
 
+interface GlobalConnectionSettings {
+  privateKeyDirectory?: string;
+  agentSocket?: string;
+}
+
 interface PrivateKeyCandidate {
   name: string;
   path: string;
@@ -113,6 +118,8 @@ type ConnectResponse =
 interface TetherTermApi {
   getAppInfo(): Promise<AppInfo>;
   checkForUpdates(): Promise<UpdateCheckResult>;
+  loadGlobalConnectionSettings(): Promise<GlobalConnectionSettings>;
+  saveGlobalConnectionSettings(settings: GlobalConnectionSettings): Promise<GlobalConnectionSettings>;
   listConnectionProfiles(): Promise<ConnectionProfile[]>;
   saveConnectionProfile(profile: ConnectionProfile, secrets: ProfileSecrets): Promise<ConnectionProfile>;
   deleteConnectionProfile(profileId: string): Promise<void>;
@@ -132,6 +139,7 @@ interface TetherTermApi {
   openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
   uploadLocalItems(localPaths: string[], remotePath: string): Promise<FileOperationResult>;
   onShowAbout(callback: () => void): () => void;
+  onShowConnectionSettings(callback: () => void): () => void;
   onSystemStatus(callback: (status: RemoteSystemStatus) => void): () => void;
   onFileActivity(callback: (activity: FileActivity) => void): () => void;
   onFileEditStatus(callback: (status: FileEditStatus) => void): () => void;
@@ -147,7 +155,10 @@ const ipcChannels = {
   getAppInfo: "app:get-info",
   checkForUpdates: "app:check-for-updates",
   showAbout: "app:show-about",
+  showConnectionSettings: "app:show-connection-settings",
   systemStatus: "system:status",
+  loadGlobalConnectionSettings: "settings:load-global-connection-settings",
+  saveGlobalConnectionSettings: "settings:save-global-connection-settings",
   listConnectionProfiles: "settings:list-connection-profiles",
   saveConnectionProfile: "settings:save-connection-profile",
   deleteConnectionProfile: "settings:delete-connection-profile",
@@ -182,6 +193,14 @@ const api: TetherTermApi = {
 
   checkForUpdates() {
     return ipcRenderer.invoke(ipcChannels.checkForUpdates);
+  },
+
+  loadGlobalConnectionSettings() {
+    return ipcRenderer.invoke(ipcChannels.loadGlobalConnectionSettings);
+  },
+
+  saveGlobalConnectionSettings(settings: GlobalConnectionSettings) {
+    return ipcRenderer.invoke(ipcChannels.saveGlobalConnectionSettings, settings);
   },
 
   listConnectionProfiles() {
@@ -258,6 +277,10 @@ const api: TetherTermApi = {
 
   onShowAbout(callback: () => void) {
     return subscribe(ipcChannels.showAbout, callback);
+  },
+
+  onShowConnectionSettings(callback: () => void) {
+    return subscribe(ipcChannels.showConnectionSettings, callback);
   },
 
   onSystemStatus(callback: (status: RemoteSystemStatus) => void) {

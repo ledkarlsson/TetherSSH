@@ -48,6 +48,11 @@ interface ProfileSecrets {
   passphrase?: string;
 }
 
+interface GlobalConnectionSettings {
+  privateKeyDirectory?: string;
+  agentSocket?: string;
+}
+
 interface PrivateKeyCandidate {
   name: string;
   path: string;
@@ -161,6 +166,9 @@ const aboutDialog = requireElement<HTMLDialogElement>("#about-dialog");
 const appVersion = requireElement<HTMLElement>("#app-version");
 const updateStatus = requireElement<HTMLDivElement>("#update-status");
 const closeAboutButton = requireElement<HTMLButtonElement>("#close-about-button");
+const connectionSettingsDialog = requireElement<HTMLDialogElement>("#connection-settings-dialog");
+const connectionSettingsForm = requireElement<HTMLFormElement>("#connection-settings-form");
+const closeConnectionSettingsButton = requireElement<HTMLButtonElement>("#close-connection-settings");
 const systemCpu = requireElement<HTMLElement>("#system-cpu");
 const systemMemory = requireElement<HTMLElement>("#system-memory");
 const systemDisk = requireElement<HTMLElement>("#system-disk");
@@ -186,6 +194,7 @@ const directoryClickTimers = new Map<string, number>();
 let fileSortKey: FileSortKey = "name";
 let fileSortAscending = true;
 let connectionProfiles: ConnectionProfile[] = [];
+let globalConnectionSettings: GlobalConnectionSettings = {};
 const fileContextMenu = createFileContextMenu();
 
 const terminal = new XTerm({
@@ -214,13 +223,23 @@ terminalElement.addEventListener("keydown", (event) => {
   void handleTerminalClipboardShortcut(event);
 }, { capture: true });
 
-void loadConnectionProfiles();
+void initializeSettings();
 
 window.tetherTerm.onShowAbout(() => {
   void showAboutDialog().then(() => runUpdateCheck());
 });
+window.tetherTerm.onShowConnectionSettings(() => {
+  void showConnectionSettingsDialog();
+});
 closeAboutButton.addEventListener("click", () => {
   aboutDialog.close();
+});
+closeConnectionSettingsButton.addEventListener("click", () => {
+  connectionSettingsDialog.close();
+});
+connectionSettingsForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void saveConnectionSettings().catch(handleProfileError);
 });
 aboutDialog.addEventListener("click", (event) => {
   if (event.target === aboutDialog) {
@@ -274,6 +293,30 @@ async function showAboutDialog(): Promise<void> {
   updateStatus.textContent = "";
   updateStatus.dataset.status = "";
   aboutDialog.showModal();
+}
+
+async function initializeSettings(): Promise<void> {
+  globalConnectionSettings = await window.tetherTerm.loadGlobalConnectionSettings();
+  privateKeyDirectoryInput.value = globalConnectionSettings.privateKeyDirectory ?? "";
+  agentSocketInput.value = globalConnectionSettings.agentSocket ?? "";
+  await loadConnectionProfiles();
+}
+
+async function showConnectionSettingsDialog(): Promise<void> {
+  globalConnectionSettings = await window.tetherTerm.loadGlobalConnectionSettings();
+  privateKeyDirectoryInput.value = globalConnectionSettings.privateKeyDirectory ?? "";
+  agentSocketInput.value = globalConnectionSettings.agentSocket ?? "";
+  connectionSettingsDialog.showModal();
+}
+
+async function saveConnectionSettings(): Promise<void> {
+  globalConnectionSettings = await window.tetherTerm.saveGlobalConnectionSettings({
+    privateKeyDirectory: privateKeyDirectoryInput.value.trim() || undefined,
+    agentSocket: agentSocketInput.value.trim() || undefined
+  });
+  await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory, privateKeyPathSelect.value);
+  connectionSettingsDialog.close();
+  setTransientStatus("Saved global connection settings.");
 }
 
 async function runUpdateCheck(): Promise<void> {
@@ -451,7 +494,7 @@ function readConnectionConfig(): ConnectionConfig {
     password: passwordInput.value,
     privateKeyPath: privateKeyPathSelect.value || undefined,
     passphrase: passphraseInput.value,
-    agentSocket: agentSocketInput.value.trim() || undefined
+    agentSocket: globalConnectionSettings.agentSocket
   };
 }
 
@@ -495,9 +538,7 @@ function currentConnectionProfile(markUsed: boolean): ConnectionProfile {
     port: config.port,
     username: config.username,
     authMethod: config.authMethod,
-    privateKeyDirectory: privateKeyDirectoryInput.value.trim() || undefined,
     privateKeyPath: config.privateKeyPath,
-    agentSocket: config.agentSocket,
     favorite: favoriteProfileCheckbox.checked,
     rememberPassword: rememberPasswordCheckbox.checked,
     rememberPassphrase: rememberPassphraseCheckbox.checked,
@@ -538,9 +579,7 @@ async function selectConnectionProfile(profileId: string): Promise<void> {
   favoriteProfileCheckbox.checked = profile.favorite;
   setTargetValue(profile);
   authMethodSelect.value = profile.authMethod;
-  privateKeyDirectoryInput.value = profile.privateKeyDirectory ?? "";
-  await refreshPrivateKeys(profile.privateKeyDirectory, profile.privateKeyPath);
-  agentSocketInput.value = profile.agentSocket ?? "";
+  await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory, profile.privateKeyPath);
   rememberPasswordCheckbox.checked = profile.rememberPassword;
   rememberPassphraseCheckbox.checked = profile.rememberPassphrase;
   passwordInput.value = secrets.password ?? "";
@@ -588,12 +627,10 @@ function createNewProfile(): void {
   authMethodSelect.value = "auto";
   passwordInput.value = "";
   rememberPasswordCheckbox.checked = false;
-  privateKeyDirectoryInput.value = "";
   privateKeyPathSelect.replaceChildren(new Option("No private keys found", ""));
   privateKeyStatus.textContent = "Scanning the default SSH folder...";
   passphraseInput.value = "";
   rememberPassphraseCheckbox.checked = false;
-  agentSocketInput.value = "";
   deleteProfileButton.disabled = true;
   updateAuthenticationFields();
   setTcpStatus("idle", "Enter user@hostname:port");
@@ -603,7 +640,7 @@ function createNewProfile(): void {
 
 async function browsePrivateKeyDirectory(): Promise<void> {
   const selectedDirectory = await window.tetherTerm.selectPrivateKeyDirectory(
-    privateKeyDirectoryInput.value.trim() || undefined
+    globalConnectionSettings.privateKeyDirectory
   );
 
   if (selectedDirectory) {

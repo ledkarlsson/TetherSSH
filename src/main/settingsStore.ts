@@ -2,7 +2,7 @@ import { app, safeStorage } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { ConnectionProfile, ProfileSecrets } from "../shared/ipc";
+import { ConnectionProfile, GlobalConnectionSettings, ProfileSecrets } from "../shared/ipc";
 
 interface LegacyConnectionProfile {
   host?: string;
@@ -19,6 +19,7 @@ interface SettingsFile {
   connectionProfile?: LegacyConnectionProfile;
   profiles?: ConnectionProfile[];
   profileSecrets?: Record<string, EncryptedProfileSecrets>;
+  connectionSettings?: GlobalConnectionSettings;
 }
 
 function settingsPath(): string {
@@ -104,6 +105,30 @@ export async function loadProfileSecrets(profileId: string): Promise<ProfileSecr
   };
 }
 
+export async function loadGlobalConnectionSettings(): Promise<GlobalConnectionSettings> {
+  const settings = await readSettings();
+
+  if (settings.connectionSettings) {
+    return normalizeGlobalConnectionSettings(settings.connectionSettings);
+  }
+
+  const legacyProfile = settings.profiles?.find((profile) => profile.privateKeyDirectory || profile.agentSocket);
+  return normalizeGlobalConnectionSettings({
+    privateKeyDirectory: legacyProfile?.privateKeyDirectory,
+    agentSocket: legacyProfile?.agentSocket
+  });
+}
+
+export async function saveGlobalConnectionSettings(
+  connectionSettings: GlobalConnectionSettings
+): Promise<GlobalConnectionSettings> {
+  const settings = await readSettings();
+  const normalized = normalizeGlobalConnectionSettings(connectionSettings);
+  settings.connectionSettings = normalized;
+  await writeSettings(settings);
+  return normalized;
+}
+
 async function readSettings(): Promise<SettingsFile> {
   try {
     return JSON.parse(await fs.readFile(settingsPath(), "utf8")) as SettingsFile;
@@ -157,14 +182,18 @@ function normalizeProfile(profile: ConnectionProfile): ConnectionProfile {
     port: Number.isFinite(profile.port) && profile.port > 0 ? profile.port : 22,
     username,
     authMethod: profile.authMethod ?? "auto",
-    privateKeyDirectory: profile.privateKeyDirectory?.trim()
-      || (profile.privateKeyPath ? path.dirname(profile.privateKeyPath) : undefined),
     privateKeyPath: profile.privateKeyPath?.trim() || undefined,
-    agentSocket: profile.agentSocket?.trim() || undefined,
     favorite: Boolean(profile.favorite),
     rememberPassword: Boolean(profile.rememberPassword),
     rememberPassphrase: Boolean(profile.rememberPassphrase),
     lastUsedAt: Number.isFinite(profile.lastUsedAt) ? profile.lastUsedAt : Date.now()
+  };
+}
+
+function normalizeGlobalConnectionSettings(settings: GlobalConnectionSettings): GlobalConnectionSettings {
+  return {
+    privateKeyDirectory: settings.privateKeyDirectory?.trim() || undefined,
+    agentSocket: settings.agentSocket?.trim() || undefined
   };
 }
 

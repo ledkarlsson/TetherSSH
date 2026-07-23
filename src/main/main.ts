@@ -20,7 +20,9 @@ import {
 import {
   deleteConnectionProfile,
   listConnectionProfiles,
+  loadGlobalConnectionSettings,
   loadProfileSecrets,
+  saveGlobalConnectionSettings,
   saveConnectionProfile
 } from "./settingsStore";
 import { verifyHostKey } from "./knownHostsStore";
@@ -122,6 +124,15 @@ function createApplicationMenu(): void {
       submenu: [
         { role: "minimize" },
         { role: "close" }
+      ]
+    },
+    {
+      label: "Settings",
+      submenu: [
+        {
+          label: "Connection settings",
+          click: () => sendToRenderer(ipcChannels.showConnectionSettings)
+        }
       ]
     },
     {
@@ -248,6 +259,14 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(ipcChannels.checkForUpdates, () => {
     return checkForUpdates();
+  });
+
+  ipcMain.handle(ipcChannels.loadGlobalConnectionSettings, () => {
+    return loadGlobalConnectionSettings();
+  });
+
+  ipcMain.handle(ipcChannels.saveGlobalConnectionSettings, (_event, settings) => {
+    return saveGlobalConnectionSettings(settings);
   });
 
   ipcMain.handle(ipcChannels.listConnectionProfiles, async () => {
