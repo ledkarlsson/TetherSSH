@@ -39,8 +39,9 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#connection-form")).toBeVisible();
     await expect(page.locator("#terminal")).toBeVisible();
     await expect(page.locator("#terminal-title")).toHaveText("not connected");
+    await expect(page.locator(".files-pane")).toBeHidden();
     await expect(page.locator("#terminal")).not.toContainText("TetherSSH MVP ready");
-    await expect(page.locator("#file-tree")).toBeVisible();
+    await expect(page.locator("#file-tree")).toBeHidden();
     await expect(page.locator("#file-status")).toHaveText("No file activity");
     await expect(page.locator("#session-log")).toBeVisible();
     await expect(page.locator("#refresh-files")).toHaveCount(0);
@@ -76,6 +77,7 @@ test("starts the app without renderer errors", async () => {
 
     await expect(page.locator("#terminal-title")).toHaveText(`Connected to ${user}@${server}`);
     await expect(page.locator("#status")).toHaveText(`Connected to ${user}@${server}`);
+    await expect(page.locator(".files-pane")).toBeVisible();
     await expect(page.locator("body")).toHaveClass(/connection-panel-collapsed/);
     await expect(page.locator("#connection-form")).toBeHidden();
     await expect.poll(() => page.evaluate(() => {
@@ -194,6 +196,12 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#cwd")).toHaveText(/\/home\/test\/projects/);
     await expect(page.evaluate(() => typeof window.tetherTerm.getPathForFile)).resolves.toBe("function");
     await expect(page.evaluate(() => typeof window.tetherTerm.uploadLocalItems)).resolves.toBe("function");
+
+    await page.locator("#disconnect-button").click();
+    await expect(page.locator("#terminal-title")).toHaveText("not connected");
+    await expect(page.locator("#cwd")).toHaveText(".");
+    await expect(page.locator(".files-pane")).toBeHidden();
+    await expect(page.locator("#terminal .xterm-rows")).toHaveText("");
 
     expect(errors).toEqual([]);
   } finally {

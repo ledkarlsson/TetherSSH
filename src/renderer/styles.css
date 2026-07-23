@@ -288,6 +288,14 @@ button:disabled {
   min-width: 0;
 }
 
+.disconnected .workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.disconnected .files-pane {
+  display: none;
+}
+
 .terminal-pane,
 .files-pane {
   display: grid;
