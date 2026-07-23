@@ -55,6 +55,15 @@ interface TcpTestResult {
   message?: string;
 }
 
+interface AppInfo {
+  version: string;
+}
+
+interface UpdateCheckResult {
+  status: "available" | "current" | "unavailable" | "error";
+  message: string;
+}
+
 interface RemoteFile {
   name: string;
   path: string;
@@ -94,6 +103,8 @@ type ConnectResponse =
   | { ok: false; message: string };
 
 interface TetherTermApi {
+  getAppInfo(): Promise<AppInfo>;
+  checkForUpdates(): Promise<UpdateCheckResult>;
   listConnectionProfiles(): Promise<ConnectionProfile[]>;
   saveConnectionProfile(profile: ConnectionProfile, secrets: ProfileSecrets): Promise<ConnectionProfile>;
   deleteConnectionProfile(profileId: string): Promise<void>;
@@ -123,6 +134,8 @@ interface TetherTermApi {
 }
 
 const ipcChannels = {
+  getAppInfo: "app:get-info",
+  checkForUpdates: "app:check-for-updates",
   listConnectionProfiles: "settings:list-connection-profiles",
   saveConnectionProfile: "settings:save-connection-profile",
   deleteConnectionProfile: "settings:delete-connection-profile",
@@ -151,6 +164,14 @@ const ipcChannels = {
 } as const;
 
 const api: TetherTermApi = {
+  getAppInfo() {
+    return ipcRenderer.invoke(ipcChannels.getAppInfo);
+  },
+
+  checkForUpdates() {
+    return ipcRenderer.invoke(ipcChannels.checkForUpdates);
+  },
+
   listConnectionProfiles() {
     return ipcRenderer.invoke(ipcChannels.listConnectionProfiles);
   },

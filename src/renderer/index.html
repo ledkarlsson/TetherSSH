@@ -29,6 +29,11 @@
           <p>Terminal and remote files, tied to one SSH session.</p>
         </header>
 
+        <nav class="app-actions" aria-label="Application">
+          <button id="about-button" type="button">About</button>
+          <button id="check-updates-button" type="button">Check for new updates</button>
+        </nav>
+
         <form id="connection-form" class="connection-form">
           <div class="profile-toolbar">
             <label>
@@ -166,6 +171,19 @@
         </section>
       </section>
     </main>
+
+    <dialog id="about-dialog" class="about-dialog" aria-labelledby="about-title">
+      <div class="about-dialog-content">
+        <h2 id="about-title">About TetherSSH</h2>
+        <p>Terminal and remote files, tied to one SSH session.</p>
+        <p class="about-version">Version <strong id="app-version">—</strong></p>
+        <div id="update-status" class="update-status" aria-live="polite"></div>
+        <div class="about-dialog-actions">
+          <button id="dialog-check-updates-button" type="button">Check for new updates</button>
+          <button id="close-about-button" type="button">Close</button>
+        </div>
+      </div>
+    </dialog>
 
     <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
     <script src="./renderer.js"></script>

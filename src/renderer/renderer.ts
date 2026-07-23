@@ -64,6 +64,11 @@ interface TcpTestResult {
   message?: string;
 }
 
+interface UpdateCheckResult {
+  status: "available" | "current" | "unavailable" | "error";
+  message: string;
+}
+
 type ConnectResponse =
   | { ok: true; result: { cwd: string } }
   | { ok: false; message: string };
@@ -144,6 +149,13 @@ const fileStatus = requireElement<HTMLDivElement>("#file-status");
 const fileSummary = requireElement<HTMLDivElement>("#file-summary");
 const fileSort = requireElement<HTMLSelectElement>("#file-sort");
 const sortDirectionButton = requireElement<HTMLButtonElement>("#sort-direction");
+const aboutButton = requireElement<HTMLButtonElement>("#about-button");
+const checkUpdatesButton = requireElement<HTMLButtonElement>("#check-updates-button");
+const aboutDialog = requireElement<HTMLDialogElement>("#about-dialog");
+const appVersion = requireElement<HTMLElement>("#app-version");
+const updateStatus = requireElement<HTMLDivElement>("#update-status");
+const dialogCheckUpdatesButton = requireElement<HTMLButtonElement>("#dialog-check-updates-button");
+const closeAboutButton = requireElement<HTMLButtonElement>("#close-about-button");
 
 let currentPath = ".";
 let connected = false;
@@ -196,6 +208,24 @@ terminalElement.addEventListener("keydown", (event) => {
 
 void loadConnectionProfiles();
 
+aboutButton.addEventListener("click", () => {
+  void showAboutDialog();
+});
+checkUpdatesButton.addEventListener("click", () => {
+  void runUpdateCheck(true);
+});
+dialogCheckUpdatesButton.addEventListener("click", () => {
+  void runUpdateCheck(false);
+});
+closeAboutButton.addEventListener("click", () => {
+  aboutDialog.close();
+});
+aboutDialog.addEventListener("click", (event) => {
+  if (event.target === aboutDialog) {
+    aboutDialog.close();
+  }
+});
+
 targetInput.addEventListener("input", scheduleTcpCheck);
 profileSelect.addEventListener("change", () => {
   void selectConnectionProfile(profileSelect.value).catch(handleProfileError);
@@ -235,6 +265,34 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   await connect();
 });
+
+async function showAboutDialog(): Promise<void> {
+  const info = await window.tetherTerm.getAppInfo();
+  appVersion.textContent = info.version;
+  updateStatus.textContent = "";
+  updateStatus.dataset.status = "";
+  aboutDialog.showModal();
+}
+
+async function runUpdateCheck(openDialog: boolean): Promise<void> {
+  if (openDialog && !aboutDialog.open) {
+    await showAboutDialog();
+  }
+
+  checkUpdatesButton.disabled = true;
+  dialogCheckUpdatesButton.disabled = true;
+  updateStatus.textContent = "Checking for updates...";
+  updateStatus.dataset.status = "checking";
+
+  try {
+    const result: UpdateCheckResult = await window.tetherTerm.checkForUpdates();
+    updateStatus.textContent = result.message;
+    updateStatus.dataset.status = result.status;
+  } finally {
+    checkUpdatesButton.disabled = false;
+    dialogCheckUpdatesButton.disabled = false;
+  }
+}
 
 async function connect(): Promise<void> {
   const config = readConnectionConfig();

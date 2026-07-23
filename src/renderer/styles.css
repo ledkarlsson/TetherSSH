@@ -81,6 +81,82 @@ select {
   line-height: 1.4;
 }
 
+.app-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.6fr);
+  gap: 7px;
+}
+
+.app-actions button {
+  min-height: 30px;
+  padding-inline: 7px;
+  font-size: 12px;
+}
+
+.about-dialog {
+  width: min(440px, calc(100vw - 40px));
+  border: 1px solid #3b4858;
+  border-radius: 10px;
+  padding: 0;
+  background: #151a1f;
+  color: #d7dde5;
+  box-shadow: 0 20px 70px rgb(0 0 0 / 55%);
+}
+
+.about-dialog::backdrop {
+  background: rgb(4 7 10 / 72%);
+}
+
+.about-dialog-content {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+}
+
+.about-dialog h2,
+.about-dialog p {
+  margin: 0;
+}
+
+.about-dialog p {
+  color: #94a3b8;
+}
+
+.about-version strong {
+  color: #edf2f7;
+}
+
+.update-status {
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid #33404d;
+  border-radius: 6px;
+  background: #10161c;
+  color: #b8c2cf;
+  font-size: 12px;
+}
+
+.update-status:empty {
+  display: none;
+}
+
+.update-status[data-status="available"],
+.update-status[data-status="current"] {
+  border-color: #2f8a5b;
+  color: #6ee7a8;
+}
+
+.update-status[data-status="error"] {
+  border-color: #8a4a4a;
+  color: #f0a3a3;
+}
+
+.about-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .connection-form {
   display: flex;
   flex-direction: column;

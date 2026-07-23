@@ -83,6 +83,15 @@ export interface TcpTestResult {
   message?: string;
 }
 
+export interface AppInfo {
+  version: string;
+}
+
+export interface UpdateCheckResult {
+  status: "available" | "current" | "unavailable" | "error";
+  message: string;
+}
+
 export interface ConnectResult {
   cwd: string;
 }
@@ -92,6 +101,8 @@ export type ConnectResponse =
   | { ok: false; message: string };
 
 export interface TetherTermApi {
+  getAppInfo(): Promise<AppInfo>;
+  checkForUpdates(): Promise<UpdateCheckResult>;
   listConnectionProfiles(): Promise<ConnectionProfile[]>;
   saveConnectionProfile(profile: ConnectionProfile, secrets: ProfileSecrets): Promise<ConnectionProfile>;
   deleteConnectionProfile(profileId: string): Promise<void>;
@@ -121,6 +132,8 @@ export interface TetherTermApi {
 }
 
 export const ipcChannels = {
+  getAppInfo: "app:get-info",
+  checkForUpdates: "app:check-for-updates",
   listConnectionProfiles: "settings:list-connection-profiles",
   saveConnectionProfile: "settings:save-connection-profile",
   deleteConnectionProfile: "settings:delete-connection-profile",

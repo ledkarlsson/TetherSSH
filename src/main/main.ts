@@ -8,6 +8,7 @@ import { DownloadSummary, RemoteFileStat, SshSession } from "./sshSession";
 import {
   ConnectResponse,
   ConnectionConfig,
+  UpdateCheckResult,
   FileEditStatus,
   FileEditStatusKind,
   FileOperationResult,
@@ -27,6 +28,7 @@ import { listPrivateKeys } from "./privateKeyStore";
 
 let mainWindow: BrowserWindow | undefined;
 let session: SshSession | undefined;
+let updaterConfigured = false;
 type EditWatcher = {
   id: number;
   close(): void;
@@ -82,6 +84,21 @@ function scheduleUpdateCheck(): void {
     return;
   }
 
+  configureUpdater();
+
+  setTimeout(() => {
+    void autoUpdater.checkForUpdates().catch((error) => {
+      console.error("Could not check for updates:", error);
+    });
+  }, 3_000);
+}
+
+function configureUpdater(): void {
+  if (updaterConfigured) {
+    return;
+  }
+
+  updaterConfigured = true;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
@@ -92,12 +109,46 @@ function scheduleUpdateCheck(): void {
   autoUpdater.on("error", (error) => {
     console.error("Automatic update failed:", error);
   });
+}
 
-  setTimeout(() => {
-    void autoUpdater.checkForUpdates().catch((error) => {
-      console.error("Could not check for updates:", error);
-    });
-  }, 3_000);
+async function checkForUpdates(): Promise<UpdateCheckResult> {
+  if (!app.isPackaged) {
+    return {
+      status: "unavailable",
+      message: "Update checks are available in the installed version of TetherSSH."
+    };
+  }
+
+  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    return {
+      status: "unavailable",
+      message: "Automatic updates are not available in the portable version."
+    };
+  }
+
+  configureUpdater();
+
+  try {
+    const result = await autoUpdater.checkForUpdates();
+
+    if (result?.isUpdateAvailable) {
+      return {
+        status: "available",
+        message: `Version ${result.updateInfo.version} is available and is being downloaded.`
+      };
+    }
+
+    return {
+      status: "current",
+      message: `TetherSSH ${app.getVersion()} is up to date.`
+    };
+  } catch (error) {
+    console.error("Manual update check failed:", error);
+    return {
+      status: "error",
+      message: `Could not check for updates: ${toErrorMessage(error)}`
+    };
+  }
 }
 
 async function promptToInstallUpdate(version: string): Promise<void> {
@@ -130,6 +181,14 @@ app.on("window-all-closed", () => {
 });
 
 function registerIpcHandlers(): void {
+  ipcMain.handle(ipcChannels.getAppInfo, () => {
+    return { version: app.getVersion() };
+  });
+
+  ipcMain.handle(ipcChannels.checkForUpdates, () => {
+    return checkForUpdates();
+  });
+
   ipcMain.handle(ipcChannels.listConnectionProfiles, async () => {
     return listConnectionProfiles();
   });
