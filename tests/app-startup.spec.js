@@ -51,13 +51,12 @@ test("starts the app without renderer errors", async () => {
       };
     });
     expect(applicationMenu.labels).toEqual(["File", "Edit", "View", "Window", "Help"]);
-    expect(applicationMenu.helpItems).toEqual(["About TetherSSH", "Check for new updates"]);
+    expect(applicationMenu.helpItems).toEqual(["About TetherSSH"]);
     await app.evaluate(({ BrowserWindow }, channel) => {
       BrowserWindow.getAllWindows()[0].webContents.send(channel);
     }, "app:show-about");
     await expect(page.locator("#about-dialog")).toBeVisible();
     await expect(page.locator("#app-version")).toHaveText("0.1.0");
-    await page.locator("#dialog-check-updates-button").click();
     await expect(page.locator("#update-status"))
       .toHaveText("Update checks are available in the installed version of TetherSSH.");
     await page.locator("#close-about-button").click();

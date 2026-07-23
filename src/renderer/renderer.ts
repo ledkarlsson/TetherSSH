@@ -159,7 +159,6 @@ const sortDirectionButton = requireElement<HTMLButtonElement>("#sort-direction")
 const aboutDialog = requireElement<HTMLDialogElement>("#about-dialog");
 const appVersion = requireElement<HTMLElement>("#app-version");
 const updateStatus = requireElement<HTMLDivElement>("#update-status");
-const dialogCheckUpdatesButton = requireElement<HTMLButtonElement>("#dialog-check-updates-button");
 const closeAboutButton = requireElement<HTMLButtonElement>("#close-about-button");
 const systemCpu = requireElement<HTMLElement>("#system-cpu");
 const systemMemory = requireElement<HTMLElement>("#system-memory");
@@ -217,13 +216,7 @@ terminalElement.addEventListener("keydown", (event) => {
 void loadConnectionProfiles();
 
 window.tetherTerm.onShowAbout(() => {
-  void showAboutDialog();
-});
-window.tetherTerm.onCheckForUpdates(() => {
-  void runUpdateCheck(true);
-});
-dialogCheckUpdatesButton.addEventListener("click", () => {
-  void runUpdateCheck(false);
+  void showAboutDialog().then(() => runUpdateCheck());
 });
 closeAboutButton.addEventListener("click", () => {
   aboutDialog.close();
@@ -282,22 +275,13 @@ async function showAboutDialog(): Promise<void> {
   aboutDialog.showModal();
 }
 
-async function runUpdateCheck(openDialog: boolean): Promise<void> {
-  if (openDialog && !aboutDialog.open) {
-    await showAboutDialog();
-  }
-
-  dialogCheckUpdatesButton.disabled = true;
+async function runUpdateCheck(): Promise<void> {
   updateStatus.textContent = "Checking for updates...";
   updateStatus.dataset.status = "checking";
 
-  try {
-    const result: UpdateCheckResult = await window.tetherTerm.checkForUpdates();
-    updateStatus.textContent = result.message;
-    updateStatus.dataset.status = result.status;
-  } finally {
-    dialogCheckUpdatesButton.disabled = false;
-  }
+  const result: UpdateCheckResult = await window.tetherTerm.checkForUpdates();
+  updateStatus.textContent = result.message;
+  updateStatus.dataset.status = result.status;
 }
 
 async function connect(): Promise<void> {

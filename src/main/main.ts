@@ -130,10 +130,6 @@ function createApplicationMenu(): void {
         {
           label: "About TetherSSH",
           click: () => sendToRenderer(ipcChannels.showAbout)
-        },
-        {
-          label: "Check for new updates",
-          click: () => sendToRenderer(ipcChannels.requestUpdateCheck)
         }
       ]
     }
