@@ -67,8 +67,8 @@
     },
     "nsis": {
       "artifactName": "${productName}-${version}-${arch}-setup.${ext}",
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "oneClick": true,
+      "perMachine": false
     },
     "portable": {
       "artifactName": "${productName}-${version}-${arch}-portable.${ext}"

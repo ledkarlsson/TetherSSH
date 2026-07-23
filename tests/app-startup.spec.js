@@ -36,14 +36,22 @@ test("starts the app without renderer errors", async () => {
 
   try {
     await expect(page.locator("h1")).toHaveText("TetherSSH");
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) => {
+      return BrowserWindow.getAllWindows()[0].getTitle();
+    })).toBe("TetherSSH 0.1.0");
     await expect(page.locator("#connection-form")).toBeVisible();
     await expect(page.locator("#terminal .xterm")).toBeVisible();
-    const helpMenuItems = await app.evaluate(({ Menu }) => {
-      return Menu.getApplicationMenu().items
-        .find((item) => item.label === "Help")
-        .submenu.items.map((item) => item.label);
+    const applicationMenu = await app.evaluate(({ Menu }) => {
+      const menu = Menu.getApplicationMenu();
+      return {
+        labels: menu.items.map((item) => item.label),
+        helpItems: menu.items
+          .find((item) => item.label === "Help")
+          .submenu.items.map((item) => item.label)
+      };
     });
-    expect(helpMenuItems).toEqual(["About TetherSSH", "Check for new updates"]);
+    expect(applicationMenu.labels).toEqual(["File", "Edit", "View", "Window", "Help"]);
+    expect(applicationMenu.helpItems).toEqual(["About TetherSSH", "Check for new updates"]);
     await app.evaluate(({ BrowserWindow }, channel) => {
       BrowserWindow.getAllWindows()[0].webContents.send(channel);
     }, "app:show-about");

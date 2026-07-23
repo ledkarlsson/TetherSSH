@@ -50,7 +50,7 @@ function createWindow(): void {
     height: 820,
     minWidth: 960,
     minHeight: 640,
-    title: "TetherSSH",
+    title: `TetherSSH ${app.getVersion()}`,
     backgroundColor: "#101316",
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
@@ -61,6 +61,10 @@ function createWindow(): void {
 
   mainWindow.on("closed", () => {
     mainWindow = undefined;
+  });
+
+  mainWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
   });
 
   void mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -81,6 +85,45 @@ app.whenReady().then(() => {
 
 function createApplicationMenu(): void {
   const menu = Menu.buildFromTemplate([
+    {
+      label: "File",
+      submenu: [
+        { role: "quit" }
+      ]
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" }
+      ]
+    },
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" }
+      ]
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "close" }
+      ]
+    },
     {
       label: "Help",
       submenu: [
@@ -189,7 +232,7 @@ async function promptToInstallUpdate(version: string): Promise<void> {
     : await dialog.showMessageBox(options);
 
   if (result.response === 0) {
-    autoUpdater.quitAndInstall();
+    autoUpdater.quitAndInstall(true, true);
   }
 }
 
