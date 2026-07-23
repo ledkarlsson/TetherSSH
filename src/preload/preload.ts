@@ -67,6 +67,7 @@ interface UpdateCheckResult {
 interface RemoteSystemStatus {
   cpuPercent?: number;
   freeMemory?: string;
+  totalMemory?: string;
   diskUsage?: string;
   error?: string;
 }

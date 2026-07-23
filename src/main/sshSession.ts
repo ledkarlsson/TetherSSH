@@ -115,19 +115,20 @@ export class SshSession extends EventEmitter {
     const command = [
       "LC_ALL=C",
       "cpu=$(top -bn1 2>/dev/null | awk '/^%?Cpu/{print 100-$8; exit}')",
-      "mem=$(awk '/^MemAvailable:/{printf \"%.1f GiB\", $2/1048576}' /proc/meminfo 2>/dev/null)",
+      "mem=$(awk '/^MemTotal:/{total=$2} /^MemAvailable:/{available=$2} END{printf \"%.1f GiB|%.1f GiB\", available/1048576, total/1048576}' /proc/meminfo 2>/dev/null)",
       "printf 'CPU=%s\\nMEM=%s\\nDF_START\\n' \"$cpu\" \"$mem\"",
       "df -h 2>&1",
       "printf '\\nDF_END\\n'"
     ].join("; ");
     const output = await this.execCommand(command);
     const cpuMatch = output.match(/^CPU=([0-9.]+)/m);
-    const memoryMatch = output.match(/^MEM=(.+)$/m);
+    const memoryMatch = output.match(/^MEM=([^|]+)\|(.+)$/m);
     const diskMatch = output.match(/DF_START\r?\n([\s\S]*?)\r?\nDF_END/);
 
     return {
       cpuPercent: cpuMatch ? Math.max(0, Math.min(100, Number(cpuMatch[1]))) : undefined,
       freeMemory: memoryMatch?.[1].trim() || undefined,
+      totalMemory: memoryMatch?.[2].trim() || undefined,
       diskUsage: diskMatch?.[1].trim() || undefined
     };
   }

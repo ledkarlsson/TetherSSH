@@ -95,6 +95,7 @@ export interface UpdateCheckResult {
 export interface RemoteSystemStatus {
   cpuPercent?: number;
   freeMemory?: string;
+  totalMemory?: string;
   diskUsage?: string;
   error?: string;
 }

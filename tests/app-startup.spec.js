@@ -104,7 +104,7 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator(".files-pane")).toBeVisible();
     await expect(page.locator("#system-status")).toBeVisible();
     await expect(page.locator("#system-cpu")).toHaveText(/\d+\.\d%/);
-    await expect(page.locator("#system-memory")).toHaveText(/\d+\.\d GiB/);
+    await expect(page.locator("#system-memory")).toHaveText(/\d+\.\d GiB \/ \d+\.\d GiB/);
     await expect(page.locator("#system-disk")).toContainText("Filesystem");
     await expect(page.locator("body")).toHaveClass(/connection-panel-collapsed/);
     await expect(page.locator("#connection-form")).toBeHidden();

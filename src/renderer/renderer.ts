@@ -72,6 +72,7 @@ interface UpdateCheckResult {
 interface RemoteSystemStatus {
   cpuPercent?: number;
   freeMemory?: string;
+  totalMemory?: string;
   diskUsage?: string;
   error?: string;
 }
@@ -414,7 +415,9 @@ if (window.tetherTerm) {
     }
 
     systemCpu.textContent = status.cpuPercent === undefined ? "—" : `${status.cpuPercent.toFixed(1)}%`;
-    systemMemory.textContent = status.freeMemory ?? "—";
+    systemMemory.textContent = status.freeMemory && status.totalMemory
+      ? `${status.freeMemory} / ${status.totalMemory}`
+      : status.freeMemory ?? "—";
     systemDisk.textContent = status.diskUsage ?? "df -h unavailable";
   });
 
