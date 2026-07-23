@@ -379,7 +379,7 @@ async function connect(): Promise<void> {
     currentPath = response.result.cwd;
     updateCwd(currentPath);
     updateTerminalTitle(config);
-    setStatus(`Connected to ${config.username}@${config.host}`);
+    setStatus("Connected");
     appendSessionLog("Connected.");
     try {
       await saveCurrentProfile(true);
@@ -741,7 +741,7 @@ function setTcpStatus(state: "idle" | "checking" | "reachable" | "unreachable", 
 }
 
 function updateTerminalTitle(config: ConnectionConfig): void {
-  terminalTitle.textContent = `Connected to ${config.username}@${config.host}`;
+  terminalTitle.textContent = "terminal";
 }
 
 function resetTerminalTitle(): void {

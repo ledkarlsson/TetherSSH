@@ -113,8 +113,9 @@ test("starts the app without renderer errors", async () => {
 
     await page.locator("#password").press("Enter");
 
-    await expect(page.locator("#terminal-title")).toHaveText(`Connected to ${user}@${server}`);
-    await expect(page.locator("#status")).toHaveText(`Connected to ${user}@${server}`);
+    await expect(page.locator("#terminal-title")).toHaveText("terminal");
+    await expect(page.locator("#status")).toHaveText("Connected");
+    await expect(page.locator("body")).not.toContainText(`Connected to ${user}@${server}`);
     await expect(page.locator(".files-pane")).toBeVisible();
     await expect(page.locator("#system-status")).toBeVisible();
     await expect(page.locator("#system-cpu")).toHaveText(/\d+\.\d%/);
