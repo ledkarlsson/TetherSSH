@@ -13,3 +13,7 @@ This project uses Playwright to start the Electron app and verify the basic SSH 
 `npm run test:e2e` starts an Electron GUI process and must be run outside the sandbox with escalated permissions. Running it inside the sandbox can cause `electron.exe` breakpoint crashes and Playwright timeouts.
 
 For documentation-only changes, running the e2e test is optional unless the change affects documented commands, setup, or behavior.
+
+## Git and GitHub
+
+Run all `git` and `gh` commands outside the sandbox with escalated permissions. The sandbox uses a separate Windows user context and cannot reliably access the repository ownership, the user's GitHub CLI keyring token, or SSH configuration.
