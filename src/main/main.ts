@@ -32,6 +32,7 @@ let mainWindow: BrowserWindow | undefined;
 let session: SshSession | undefined;
 let updaterConfigured = false;
 let systemStatusTimer: NodeJS.Timeout | undefined;
+let pendingAvailableVersion: string | undefined;
 type EditWatcher = {
   id: number;
   close(): void;
@@ -67,6 +68,12 @@ function createWindow(): void {
 
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault();
+  });
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (pendingAvailableVersion) {
+      sendToRenderer(ipcChannels.updateAvailable, pendingAvailableVersion);
+    }
   });
 
   void mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -173,6 +180,11 @@ function configureUpdater(): void {
   updaterConfigured = true;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-available", (info) => {
+    pendingAvailableVersion = info.version;
+    sendToRenderer(ipcChannels.updateAvailable, info.version);
+  });
 
   autoUpdater.on("update-downloaded", (info) => {
     void promptToInstallUpdate(info.version);

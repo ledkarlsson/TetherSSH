@@ -137,6 +137,7 @@ export interface TetherTermApi {
   openRemoteFile(file: RemoteFile): Promise<FileOperationResult>;
   uploadLocalItems(localPaths: string[], remotePath: string): Promise<FileOperationResult>;
   onShowAbout(callback: () => void): () => void;
+  onUpdateAvailable(callback: (version: string) => void): () => void;
   onShowConnectionSettings(callback: () => void): () => void;
   onSystemStatus(callback: (status: RemoteSystemStatus) => void): () => void;
   onFileActivity(callback: (activity: FileActivity) => void): () => void;
@@ -153,6 +154,7 @@ export const ipcChannels = {
   getAppInfo: "app:get-info",
   checkForUpdates: "app:check-for-updates",
   showAbout: "app:show-about",
+  updateAvailable: "app:update-available",
   showConnectionSettings: "app:show-connection-settings",
   systemStatus: "system:status",
   loadGlobalConnectionSettings: "settings:load-global-connection-settings",

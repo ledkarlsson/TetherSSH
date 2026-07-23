@@ -62,6 +62,13 @@ test("starts the app without renderer errors", async () => {
       .toHaveText("Update checks are available in the installed version of TetherSSH.");
     await page.locator("#close-about-button").click();
     await expect(page.locator("#about-dialog")).toBeHidden();
+    await app.evaluate(({ BrowserWindow }, payload) => {
+      BrowserWindow.getAllWindows()[0].webContents.send("app:update-available", payload);
+    }, "0.2.0");
+    await expect(page.locator("#about-dialog")).toBeVisible();
+    await expect(page.locator("#update-status"))
+      .toHaveText("Version 0.2.0 is available and is being downloaded.");
+    await page.locator("#close-about-button").click();
     await expect(page.locator("#terminal")).toBeVisible();
     await expect(page.locator("#terminal-title")).toHaveText("not connected");
     await expect(page.locator(".files-pane")).toBeHidden();

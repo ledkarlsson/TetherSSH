@@ -228,6 +228,9 @@ void initializeSettings();
 window.tetherTerm.onShowAbout(() => {
   void showAboutDialog().then(() => runUpdateCheck());
 });
+window.tetherTerm.onUpdateAvailable((version) => {
+  void showAvailableUpdate(version);
+});
 window.tetherTerm.onShowConnectionSettings(() => {
   void showConnectionSettingsDialog();
 });
@@ -293,6 +296,15 @@ async function showAboutDialog(): Promise<void> {
   updateStatus.textContent = "";
   updateStatus.dataset.status = "";
   aboutDialog.showModal();
+}
+
+async function showAvailableUpdate(version: string): Promise<void> {
+  if (!aboutDialog.open) {
+    await showAboutDialog();
+  }
+
+  updateStatus.textContent = `Version ${version} is available and is being downloaded.`;
+  updateStatus.dataset.status = "available";
 }
 
 async function initializeSettings(): Promise<void> {
