@@ -1,6 +1,7 @@
 type XTermTerminal = {
   open(element: HTMLElement): void;
   focus(): void;
+  reset(): void;
   write(data: string): void;
   onData(callback: (data: string) => void): void;
   resize(cols: number, rows: number): void;
@@ -263,6 +264,7 @@ async function connect(): Promise<void> {
     }
 
     connected = true;
+    document.body.classList.remove("disconnected");
     sftpAvailable = true;
     sftpMessage = "";
     disconnectButton.disabled = false;
@@ -291,13 +293,7 @@ async function connect(): Promise<void> {
 
 disconnectButton.addEventListener("click", async () => {
   await window.tetherTerm.disconnect();
-  connected = false;
-  connectButton.disabled = false;
-  disconnectButton.disabled = true;
-  resetTerminalTitle();
-  setConnectionPanelCollapsed(false);
-  setStatus("Disconnected");
-  clearFileEditStatuses();
+  resetDisconnectedState();
 });
 
 toggleConnectionPanelButton.addEventListener("click", () => {
@@ -371,13 +367,7 @@ if (window.tetherTerm) {
       return;
     }
 
-    connected = false;
-    connectButton.disabled = false;
-    disconnectButton.disabled = true;
-    resetTerminalTitle();
-    setConnectionPanelCollapsed(false);
-    setStatus("Disconnected");
-    clearFileEditStatuses();
+    resetDisconnectedState();
     appendSessionLog("Session closed.");
   });
 } else {
@@ -644,6 +634,30 @@ function updateTerminalTitle(config: ConnectionConfig): void {
 
 function resetTerminalTitle(): void {
   terminalTitle.textContent = "not connected";
+}
+
+function resetDisconnectedState(): void {
+  connected = false;
+  currentPath = ".";
+  sftpAvailable = false;
+  sftpMessage = "";
+  renderedFiles = [];
+  latestFileActivity = undefined;
+  window.clearTimeout(fileActivityTimer);
+  clearExpandedDirectories();
+  clearFileEditStatuses();
+  terminal.reset();
+  updateCwd(".");
+  fileTree.replaceChildren();
+  fileSummary.textContent = "0 files | 0 folders | Total 0 B";
+  fileStatus.textContent = "No file activity";
+  connectButton.disabled = false;
+  disconnectButton.disabled = true;
+  resetTerminalTitle();
+  setConnectionPanelCollapsed(false);
+  document.body.classList.add("disconnected");
+  setStatus("Disconnected");
+  resizeTerminal();
 }
 
 function setConnectionPanelCollapsed(collapsed: boolean): void {
