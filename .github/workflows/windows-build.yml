@@ -48,11 +48,17 @@ jobs:
           path: release/*.exe
           if-no-files-found: error
 
+      - name: Prepare release tag metadata
+        if: github.event_name == 'push'
+        id: release_meta
+        shell: bash
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Create build release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}-${{ github.sha }}
+          tag_name: build-${{ github.run_number }}-${{ steps.release_meta.outputs.short_sha }}
           name: Build ${{ github.run_number }}
           generate_release_notes: true
           prerelease: true
