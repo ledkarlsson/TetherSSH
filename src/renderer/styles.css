@@ -348,16 +348,66 @@ button:disabled {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
+  min-height: 0;
 }
 
-.disconnected .workspace {
+.workspace-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.disconnected .workspace-panes {
   grid-template-columns: minmax(0, 1fr);
 }
 
 .disconnected .files-pane {
   display: none;
+}
+
+.system-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  max-height: 150px;
+  border-top: 1px solid #26303a;
+  background: #11171c;
+}
+
+.disconnected .system-status {
+  display: none;
+}
+
+.system-status-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 190px;
+  padding: 12px 16px;
+  border-right: 1px solid #26303a;
+  color: #8fa0b3;
+  font-size: 12px;
+}
+
+.system-status-summary strong {
+  margin-left: 5px;
+  color: #6ee7a8;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-weight: 600;
+}
+
+.system-status pre {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 14px;
+  overflow: auto;
+  color: #aebccc;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: pre;
 }
 
 .terminal-pane,

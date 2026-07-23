@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AnyAuthMethod, AuthenticationType, Client, ClientChannel, ConnectConfig, SFTPWrapper } from "ssh2";
-import { ConnectResult, ConnectionConfig, RemoteFile, TerminalSize } from "../shared/ipc";
+import { ConnectResult, ConnectionConfig, RemoteFile, RemoteSystemStatus, TerminalSize } from "../shared/ipc";
 import { HostKeyVerificationResult } from "./knownHostsStore";
 
 export interface DownloadSummary {
@@ -109,6 +109,27 @@ export class SshSession extends EventEmitter {
     this.log("Disconnecting.");
     this.shell?.end();
     this.client.end();
+  }
+
+  async getSystemStatus(): Promise<RemoteSystemStatus> {
+    const command = [
+      "LC_ALL=C",
+      "cpu=$(top -bn1 2>/dev/null | awk '/^%?Cpu/{print 100-$8; exit}')",
+      "mem=$(awk '/^MemAvailable:/{printf \"%.1f GiB\", $2/1048576}' /proc/meminfo 2>/dev/null)",
+      "printf 'CPU=%s\\nMEM=%s\\nDF_START\\n' \"$cpu\" \"$mem\"",
+      "df -h 2>&1",
+      "printf '\\nDF_END\\n'"
+    ].join("; ");
+    const output = await this.execCommand(command);
+    const cpuMatch = output.match(/^CPU=([0-9.]+)/m);
+    const memoryMatch = output.match(/^MEM=(.+)$/m);
+    const diskMatch = output.match(/DF_START\r?\n([\s\S]*?)\r?\nDF_END/);
+
+    return {
+      cpuPercent: cpuMatch ? Math.max(0, Math.min(100, Number(cpuMatch[1]))) : undefined,
+      freeMemory: memoryMatch?.[1].trim() || undefined,
+      diskUsage: diskMatch?.[1].trim() || undefined
+    };
   }
 
   async readDirectory(remotePath: string): Promise<RemoteFile[]> {
@@ -219,6 +240,36 @@ export class SshSession extends EventEmitter {
         resolve({
           size: stats.size,
           modifiedAt: stats.mtime ? stats.mtime * 1000 : undefined
+        });
+      });
+    });
+  }
+
+  private execCommand(command: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      this.client.exec(command, (error, stream) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        let output = "";
+        let errorOutput = "";
+        stream.setEncoding("utf8");
+        stream.on("data", (chunk: string) => {
+          output += chunk;
+        });
+        stream.stderr.setEncoding("utf8");
+        stream.stderr.on("data", (chunk: string) => {
+          errorOutput += chunk;
+        });
+        stream.on("close", (code: number | null) => {
+          if (code && !output) {
+            reject(new Error(errorOutput.trim() || `Remote command exited with code ${code}.`));
+            return;
+          }
+
+          resolve(output);
         });
       });
     });

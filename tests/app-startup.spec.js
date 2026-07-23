@@ -37,6 +37,7 @@ test("starts the app without renderer errors", async () => {
   try {
     await expect(page.locator("h1")).toHaveText("TetherSSH");
     await expect(page.locator("#connection-form")).toBeVisible();
+    await expect(page.locator("#terminal .xterm")).toBeVisible();
     const helpMenuItems = await app.evaluate(({ Menu }) => {
       return Menu.getApplicationMenu().items
         .find((item) => item.label === "Help")
@@ -94,6 +95,10 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#terminal-title")).toHaveText(`Connected to ${user}@${server}`);
     await expect(page.locator("#status")).toHaveText(`Connected to ${user}@${server}`);
     await expect(page.locator(".files-pane")).toBeVisible();
+    await expect(page.locator("#system-status")).toBeVisible();
+    await expect(page.locator("#system-cpu")).toHaveText(/\d+\.\d%/);
+    await expect(page.locator("#system-memory")).toHaveText(/\d+\.\d GiB/);
+    await expect(page.locator("#system-disk")).toContainText("Filesystem");
     await expect(page.locator("body")).toHaveClass(/connection-panel-collapsed/);
     await expect(page.locator("#connection-form")).toBeHidden();
     await expect.poll(() => page.evaluate(() => {
@@ -217,6 +222,7 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#terminal-title")).toHaveText("not connected");
     await expect(page.locator("#cwd")).toHaveText(".");
     await expect(page.locator(".files-pane")).toBeHidden();
+    await expect(page.locator("#system-status")).toBeHidden();
     await expect(page.locator("#terminal .xterm-rows")).toHaveText("");
 
     expect(errors).toEqual([]);

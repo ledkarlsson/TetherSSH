@@ -29,6 +29,7 @@ import { listPrivateKeys } from "./privateKeyStore";
 let mainWindow: BrowserWindow | undefined;
 let session: SshSession | undefined;
 let updaterConfigured = false;
+let systemStatusTimer: NodeJS.Timeout | undefined;
 type EditWatcher = {
   id: number;
   close(): void;
@@ -280,11 +281,13 @@ function registerIpcHandlers(): void {
     });
 
     session.on("close", () => {
+      stopSystemStatusUpdates();
       sendToRenderer(ipcChannels.sessionClosed);
     });
 
     try {
       const result = await session.connect();
+      startSystemStatusUpdates();
       return { ok: true, result };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -294,6 +297,7 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(ipcChannels.disconnect, async () => {
+    stopSystemStatusUpdates();
     closeEditWatchers();
     session?.disconnect();
     session = undefined;
@@ -403,6 +407,35 @@ function registerIpcHandlers(): void {
   ipcMain.on(ipcChannels.terminalResize, (_event, size: TerminalSize) => {
     session?.resize(size);
   });
+}
+
+function startSystemStatusUpdates(): void {
+  stopSystemStatusUpdates();
+  void refreshSystemStatus();
+  systemStatusTimer = setInterval(() => {
+    void refreshSystemStatus();
+  }, 10_000);
+}
+
+function stopSystemStatusUpdates(): void {
+  if (systemStatusTimer) {
+    clearInterval(systemStatusTimer);
+    systemStatusTimer = undefined;
+  }
+}
+
+async function refreshSystemStatus(): Promise<void> {
+  const activeSession = session;
+
+  if (!activeSession) {
+    return;
+  }
+
+  try {
+    sendToRenderer(ipcChannels.systemStatus, await activeSession.getSystemStatus());
+  } catch (error) {
+    sendToRenderer(ipcChannels.systemStatus, { error: toErrorMessage(error) });
+  }
 }
 
 async function chooseDownloadPath(file: RemoteFile): Promise<string | undefined> {

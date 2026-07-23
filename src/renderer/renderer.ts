@@ -69,6 +69,13 @@ interface UpdateCheckResult {
   message: string;
 }
 
+interface RemoteSystemStatus {
+  cpuPercent?: number;
+  freeMemory?: string;
+  diskUsage?: string;
+  error?: string;
+}
+
 type ConnectResponse =
   | { ok: true; result: { cwd: string } }
   | { ok: false; message: string };
@@ -154,6 +161,9 @@ const appVersion = requireElement<HTMLElement>("#app-version");
 const updateStatus = requireElement<HTMLDivElement>("#update-status");
 const dialogCheckUpdatesButton = requireElement<HTMLButtonElement>("#dialog-check-updates-button");
 const closeAboutButton = requireElement<HTMLButtonElement>("#close-about-button");
+const systemCpu = requireElement<HTMLElement>("#system-cpu");
+const systemMemory = requireElement<HTMLElement>("#system-memory");
+const systemDisk = requireElement<HTMLElement>("#system-disk");
 
 let currentPath = ".";
 let connected = false;
@@ -409,6 +419,19 @@ if (window.tetherTerm) {
 
   window.tetherTerm.onSessionLog((message) => {
     appendSessionLog(message);
+  });
+
+  window.tetherTerm.onSystemStatus((status: RemoteSystemStatus) => {
+    if (status.error) {
+      systemCpu.textContent = "unavailable";
+      systemMemory.textContent = "unavailable";
+      systemDisk.textContent = status.error;
+      return;
+    }
+
+    systemCpu.textContent = status.cpuPercent === undefined ? "—" : `${status.cpuPercent.toFixed(1)}%`;
+    systemMemory.textContent = status.freeMemory ?? "—";
+    systemDisk.textContent = status.diskUsage ?? "df -h unavailable";
   });
 
   window.tetherTerm.onSessionError((message) => {
@@ -705,6 +728,9 @@ function resetDisconnectedState(): void {
   fileTree.replaceChildren();
   fileSummary.textContent = "0 files | 0 folders | Total 0 B";
   fileStatus.textContent = "No file activity";
+  systemCpu.textContent = "—";
+  systemMemory.textContent = "—";
+  systemDisk.textContent = "Connect to view df -h";
   connectButton.disabled = false;
   disconnectButton.disabled = true;
   resetTerminalTitle();

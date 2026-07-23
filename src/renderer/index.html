@@ -129,15 +129,16 @@
       </aside>
 
       <section class="workspace">
-        <section class="terminal-pane">
+        <div class="workspace-panes">
+          <section class="terminal-pane">
           <div class="pane-header">
             <span id="terminal-title">not connected</span>
             <code id="cwd">.</code>
           </div>
           <div id="terminal"></div>
-        </section>
+          </section>
 
-        <section class="files-pane">
+          <section class="files-pane">
           <div class="pane-header files-header">
             <div class="files-header-row">
               <span>Remote files</span>
@@ -163,7 +164,16 @@
             <div id="file-summary" class="file-summary">0 files | 0 folders | Total 0 B</div>
             <div id="file-status" class="file-status" aria-live="polite">No file activity</div>
           </footer>
-        </section>
+          </section>
+        </div>
+
+        <footer id="system-status" class="system-status" aria-live="polite">
+          <div class="system-status-summary">
+            <span>CPU <strong id="system-cpu">—</strong></span>
+            <span>Free memory <strong id="system-memory">—</strong></span>
+          </div>
+          <pre id="system-disk">Connect to view df -h</pre>
+        </footer>
       </section>
     </main>
 
