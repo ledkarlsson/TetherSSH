@@ -17,6 +17,7 @@ interface ConnectionConfig {
   authMethod: AuthenticationMethod;
   password?: string;
   privateKeyPath?: string;
+  privateKeyPaths?: string[];
   passphrase?: string;
   agentSocket?: string;
 }
@@ -141,9 +142,9 @@ const passwordInput = requireElement<HTMLInputElement>("#password");
 const rememberPasswordCheckbox = requireElement<HTMLInputElement>("#remember-password");
 const authMethodSelect = requireElement<HTMLSelectElement>("#auth-method");
 const privateKeyDirectoryInput = requireElement<HTMLInputElement>("#private-key-directory");
-const privateKeyPathSelect = requireElement<HTMLSelectElement>("#private-key-path");
 const browsePrivateKeyDirectoryButton = requireElement<HTMLButtonElement>("#browse-private-key-directory");
 const privateKeyStatus = requireElement<HTMLDivElement>("#private-key-status");
+const globalPrivateKeyList = requireElement<HTMLOListElement>("#global-private-key-list");
 const passphraseInput = requireElement<HTMLInputElement>("#passphrase");
 const rememberPassphraseCheckbox = requireElement<HTMLInputElement>("#remember-passphrase");
 const agentSocketInput = requireElement<HTMLInputElement>("#agent-socket");
@@ -195,6 +196,7 @@ let fileSortKey: FileSortKey = "name";
 let fileSortAscending = true;
 let connectionProfiles: ConnectionProfile[] = [];
 let globalConnectionSettings: GlobalConnectionSettings = {};
+let globalPrivateKeys: PrivateKeyCandidate[] = [];
 const fileContextMenu = createFileContextMenu();
 
 const terminal = new XTerm({
@@ -311,6 +313,7 @@ async function initializeSettings(): Promise<void> {
   globalConnectionSettings = await window.tetherTerm.loadGlobalConnectionSettings();
   privateKeyDirectoryInput.value = globalConnectionSettings.privateKeyDirectory ?? "";
   agentSocketInput.value = globalConnectionSettings.agentSocket ?? "";
+  await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory);
   await loadConnectionProfiles();
 }
 
@@ -318,6 +321,7 @@ async function showConnectionSettingsDialog(): Promise<void> {
   globalConnectionSettings = await window.tetherTerm.loadGlobalConnectionSettings();
   privateKeyDirectoryInput.value = globalConnectionSettings.privateKeyDirectory ?? "";
   agentSocketInput.value = globalConnectionSettings.agentSocket ?? "";
+  await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory);
   connectionSettingsDialog.showModal();
 }
 
@@ -326,7 +330,7 @@ async function saveConnectionSettings(): Promise<void> {
     privateKeyDirectory: privateKeyDirectoryInput.value.trim() || undefined,
     agentSocket: agentSocketInput.value.trim() || undefined
   });
-  await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory, privateKeyPathSelect.value);
+  await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory);
   connectionSettingsDialog.close();
   setTransientStatus("Saved global connection settings.");
 }
@@ -504,7 +508,7 @@ function readConnectionConfig(): ConnectionConfig {
     username: target.username,
     authMethod: authMethodSelect.value as AuthenticationMethod,
     password: passwordInput.value,
-    privateKeyPath: privateKeyPathSelect.value || undefined,
+    privateKeyPaths: globalPrivateKeys.map((key) => key.path),
     passphrase: passphraseInput.value,
     agentSocket: globalConnectionSettings.agentSocket
   };
@@ -550,7 +554,6 @@ function currentConnectionProfile(markUsed: boolean): ConnectionProfile {
     port: config.port,
     username: config.username,
     authMethod: config.authMethod,
-    privateKeyPath: config.privateKeyPath,
     favorite: favoriteProfileCheckbox.checked,
     rememberPassword: rememberPasswordCheckbox.checked,
     rememberPassphrase: rememberPassphraseCheckbox.checked,
@@ -591,7 +594,6 @@ async function selectConnectionProfile(profileId: string): Promise<void> {
   favoriteProfileCheckbox.checked = profile.favorite;
   setTargetValue(profile);
   authMethodSelect.value = profile.authMethod;
-  await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory, profile.privateKeyPath);
   rememberPasswordCheckbox.checked = profile.rememberPassword;
   rememberPassphraseCheckbox.checked = profile.rememberPassphrase;
   passwordInput.value = secrets.password ?? "";
@@ -639,15 +641,12 @@ function createNewProfile(): void {
   authMethodSelect.value = "auto";
   passwordInput.value = "";
   rememberPasswordCheckbox.checked = false;
-  privateKeyPathSelect.replaceChildren(new Option("No private keys found", ""));
-  privateKeyStatus.textContent = "Scanning the default SSH folder...";
   passphraseInput.value = "";
   rememberPassphraseCheckbox.checked = false;
   deleteProfileButton.disabled = true;
   updateAuthenticationFields();
   setTcpStatus("idle", "Enter user@hostname:port");
   targetInput.focus();
-  void refreshPrivateKeys().catch(handleProfileError);
 }
 
 async function browsePrivateKeyDirectory(): Promise<void> {
@@ -660,24 +659,24 @@ async function browsePrivateKeyDirectory(): Promise<void> {
   }
 }
 
-async function refreshPrivateKeys(directory?: string, preferredPath?: string): Promise<void> {
+async function refreshPrivateKeys(directory?: string): Promise<void> {
   privateKeyStatus.textContent = "Scanning for private keys...";
   const result: PrivateKeyListResult = await window.tetherTerm.listPrivateKeys(directory);
   privateKeyDirectoryInput.value = result.directory;
-  const options = result.keys.map((key) => new Option(`${key.name} (${key.format})`, key.path));
+  globalPrivateKeys = result.keys;
+  globalPrivateKeyList.replaceChildren(...result.keys.map((key) => {
+    const item = document.createElement("li");
+    item.textContent = `${key.name} (${key.format})`;
+    item.title = key.path;
+    return item;
+  }));
 
-  if (options.length === 0) {
-    options.push(new Option("No private keys found", ""));
+  if (result.keys.length === 0) {
+    const item = document.createElement("li");
+    item.textContent = "No private keys found.";
+    globalPrivateKeyList.append(item);
   }
 
-  if (preferredPath && !result.keys.some((key) => key.path === preferredPath)) {
-    options.push(new Option(`Unavailable: ${preferredPath}`, preferredPath));
-  }
-
-  privateKeyPathSelect.replaceChildren(...options);
-  privateKeyPathSelect.value = preferredPath && options.some((option) => option.value === preferredPath)
-    ? preferredPath
-    : result.keys[0]?.path ?? "";
   privateKeyStatus.textContent = `${result.keys.length} private key${result.keys.length === 1 ? "" : "s"} found.`;
 }
 
@@ -1371,6 +1370,8 @@ function selectionIsInsideTerminal(selection: Selection): boolean {
 }
 
 function setStatus(message: string): void {
+  window.clearTimeout(transientStatusTimer);
+  transientStatusTimer = undefined;
   statusElement.textContent = message;
 }
 

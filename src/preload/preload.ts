@@ -9,6 +9,7 @@ interface ConnectionConfig {
   authMethod: AuthenticationMethod;
   password?: string;
   privateKeyPath?: string;
+  privateKeyPaths?: string[];
   passphrase?: string;
   agentSocket?: string;
 }

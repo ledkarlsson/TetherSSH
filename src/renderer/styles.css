@@ -145,6 +145,20 @@ select {
   gap: 8px;
 }
 
+.global-private-key-list {
+  max-height: 130px;
+  margin: -8px 0 0;
+  padding: 6px 8px 6px 28px;
+  overflow: auto;
+  border: 1px solid #33404d;
+  border-radius: 6px;
+  background: #10161c;
+  color: #b8c2cf;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
 .connection-form {
   display: flex;
   flex-direction: column;

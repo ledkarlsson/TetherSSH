@@ -182,7 +182,6 @@ function normalizeProfile(profile: ConnectionProfile): ConnectionProfile {
     port: Number.isFinite(profile.port) && profile.port > 0 ? profile.port : 22,
     username,
     authMethod: profile.authMethod ?? "auto",
-    privateKeyPath: profile.privateKeyPath?.trim() || undefined,
     favorite: Boolean(profile.favorite),
     rememberPassword: Boolean(profile.rememberPassword),
     rememberPassphrase: Boolean(profile.rememberPassphrase),

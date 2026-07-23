@@ -80,7 +80,7 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("fieldset")).toHaveCount(0);
     await expect(page.locator("#profile-select")).toBeVisible();
     await expect(page.locator("#auth-method")).toHaveValue("auto");
-    await expect(page.locator("#private-key-path")).toBeVisible();
+    await expect(page.locator("#private-key-path")).toHaveCount(0);
     await app.evaluate(({ BrowserWindow }, channel) => {
       BrowserWindow.getAllWindows()[0].webContents.send(channel);
     }, "app:show-connection-settings");
@@ -91,13 +91,13 @@ test("starts the app without renderer errors", async () => {
     await page.locator("#private-key-directory").fill(keyDirectory);
     await page.locator("#private-key-directory").dispatchEvent("change");
     await expect(page.locator("#private-key-status")).toHaveText("2 private keys found.");
-    await expect(page.locator("#private-key-path option")).toHaveCount(2);
-    await expect(page.locator("#private-key-path option")).toHaveText([
+    await expect(page.locator("#global-private-key-list li")).toHaveCount(2);
+    await expect(page.locator("#global-private-key-list li")).toHaveText([
       "id_alpha (OpenSSH)",
       "work-key.ppk (PuTTY)"
     ]);
-    await expect(page.locator("#private-key-path option", { hasText: "id_alpha.pub" })).toHaveCount(0);
-    await expect(page.locator("#private-key-path option", { hasText: "notes.txt" })).toHaveCount(0);
+    await expect(page.locator("#global-private-key-list li", { hasText: "id_alpha.pub" })).toHaveCount(0);
+    await expect(page.locator("#global-private-key-list li", { hasText: "notes.txt" })).toHaveCount(0);
     await page.locator("#save-connection-settings").click();
     await expect(page.locator("#connection-settings-dialog")).toBeHidden();
 
@@ -154,6 +154,7 @@ test("starts the app without renderer errors", async () => {
     expect(settingsContents).not.toContain(password);
     expect(savedSettings.connectionSettings.privateKeyDirectory).toBe(keyDirectory);
     expect(savedSettings.profiles[0]).not.toHaveProperty("privateKeyDirectory");
+    expect(savedSettings.profiles[0]).not.toHaveProperty("privateKeyPath");
     expect(savedSettings.profiles[0]).not.toHaveProperty("agentSocket");
     expect(knownHostsContents).toContain("[localhost]:2222");
 

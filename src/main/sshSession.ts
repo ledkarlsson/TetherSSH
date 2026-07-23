@@ -393,23 +393,31 @@ export class SshSession extends EventEmitter {
     }
 
     if (keyEnabled) {
-      let privateKey: { path: string; content: Buffer } | undefined;
+      const configuredKeyPaths = this.config.privateKeyPaths
+        ?? (this.config.privateKeyPath ? [this.config.privateKeyPath] : []);
+      const privateKeys: Array<{ path: string; content: Buffer }> = [];
 
-      if (this.config.privateKeyPath) {
+      for (const keyPath of configuredKeyPaths) {
         try {
-          privateKey = readPrivateKey(this.config.privateKeyPath);
+          privateKeys.push(readPrivateKey(keyPath));
         } catch (error) {
           if (mode === "key") {
-            throw error;
+            this.log(`${toErrorMessage(error)}. Trying the next key.`);
+          } else {
+            this.log(`${toErrorMessage(error)}. Skipping it in Auto mode.`);
           }
-
-          this.log(`${toErrorMessage(error)}. Skipping it in Auto mode.`);
         }
-      } else if (mode === "auto") {
-        privateKey = readDefaultPrivateKey();
       }
 
-      if (privateKey) {
+      if (privateKeys.length === 0 && mode === "auto" && configuredKeyPaths.length === 0) {
+        const defaultPrivateKey = readDefaultPrivateKey();
+
+        if (defaultPrivateKey) {
+          privateKeys.push(defaultPrivateKey);
+        }
+      }
+
+      for (const privateKey of privateKeys) {
         this.log(`Private key auth available: ${privateKey.path}`);
         methods.push({
           type: "publickey",
@@ -417,8 +425,10 @@ export class SshSession extends EventEmitter {
           key: privateKey.content,
           passphrase: this.config.passphrase || undefined
         });
-      } else if (mode === "key") {
-        throw new Error("Select a readable SSH private key before connecting.");
+      }
+
+      if (privateKeys.length === 0 && mode === "key") {
+        throw new Error("No readable SSH private keys were found in Connection settings.");
       }
     }
 

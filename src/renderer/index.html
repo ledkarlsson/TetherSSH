@@ -79,13 +79,6 @@
 
           <div class="auth-field" data-auth-modes="auto,key">
             <label>
-              Private key <span class="label-hint">optional in Auto</span>
-              <select id="private-key-path" name="privateKeyPath">
-                <option value="">No private keys found</option>
-              </select>
-            </label>
-            <div id="private-key-status" class="field-status" aria-live="polite">Select a folder to list private keys.</div>
-            <label>
               Key passphrase <span class="label-hint">optional</span>
               <input id="passphrase" name="passphrase" type="password" autocomplete="off" />
             </label>
@@ -182,6 +175,8 @@
             <button id="browse-private-key-directory" type="button">Browse</button>
           </span>
         </label>
+        <div id="private-key-status" class="field-status" aria-live="polite">Select a folder to list private keys.</div>
+        <ol id="global-private-key-list" class="global-private-key-list"></ol>
         <label>
           SSH agent socket
           <input id="agent-socket" autocomplete="off" placeholder="SSH_AUTH_SOCK or Pageant" />
