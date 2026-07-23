@@ -154,6 +154,13 @@ select {
   font-weight: 400;
 }
 
+.field-status {
+  margin-top: -4px;
+  color: #7f8ea3;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 .tcp-status {
   min-height: 30px;
   padding: 7px 9px;

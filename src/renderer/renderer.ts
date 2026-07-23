@@ -27,6 +27,7 @@ interface ConnectionProfile {
   port: number;
   username: string;
   authMethod: AuthenticationMethod;
+  privateKeyDirectory?: string;
   privateKeyPath?: string;
   agentSocket?: string;
   favorite: boolean;
@@ -44,6 +45,17 @@ interface ConnectionTarget {
 interface ProfileSecrets {
   password?: string;
   passphrase?: string;
+}
+
+interface PrivateKeyCandidate {
+  name: string;
+  path: string;
+  format: string;
+}
+
+interface PrivateKeyListResult {
+  directory: string;
+  keys: PrivateKeyCandidate[];
 }
 
 interface TcpTestResult {
@@ -109,8 +121,10 @@ const targetInput = requireElement<HTMLInputElement>("#target");
 const passwordInput = requireElement<HTMLInputElement>("#password");
 const rememberPasswordCheckbox = requireElement<HTMLInputElement>("#remember-password");
 const authMethodSelect = requireElement<HTMLSelectElement>("#auth-method");
-const privateKeyPathInput = requireElement<HTMLInputElement>("#private-key-path");
-const browsePrivateKeyButton = requireElement<HTMLButtonElement>("#browse-private-key");
+const privateKeyDirectoryInput = requireElement<HTMLInputElement>("#private-key-directory");
+const privateKeyPathSelect = requireElement<HTMLSelectElement>("#private-key-path");
+const browsePrivateKeyDirectoryButton = requireElement<HTMLButtonElement>("#browse-private-key-directory");
+const privateKeyStatus = requireElement<HTMLDivElement>("#private-key-status");
 const passphraseInput = requireElement<HTMLInputElement>("#passphrase");
 const rememberPassphraseCheckbox = requireElement<HTMLInputElement>("#remember-passphrase");
 const agentSocketInput = requireElement<HTMLInputElement>("#agent-socket");
@@ -193,8 +207,11 @@ deleteProfileButton.addEventListener("click", () => {
   void deleteCurrentProfile().catch(handleProfileError);
 });
 authMethodSelect.addEventListener("change", updateAuthenticationFields);
-browsePrivateKeyButton.addEventListener("click", () => {
-  void browsePrivateKey().catch(handleProfileError);
+browsePrivateKeyDirectoryButton.addEventListener("click", () => {
+  void browsePrivateKeyDirectory().catch(handleProfileError);
+});
+privateKeyDirectoryInput.addEventListener("change", () => {
+  void refreshPrivateKeys(privateKeyDirectoryInput.value).catch(handleProfileError);
 });
 fileSort.addEventListener("change", () => {
   fileSortKey = fileSort.value as FileSortKey;
@@ -378,7 +395,7 @@ function readConnectionConfig(): ConnectionConfig {
     username: target.username,
     authMethod: authMethodSelect.value as AuthenticationMethod,
     password: passwordInput.value,
-    privateKeyPath: privateKeyPathInput.value.trim() || undefined,
+    privateKeyPath: privateKeyPathSelect.value || undefined,
     passphrase: passphraseInput.value,
     agentSocket: agentSocketInput.value.trim() || undefined
   };
@@ -424,6 +441,7 @@ function currentConnectionProfile(markUsed: boolean): ConnectionProfile {
     port: config.port,
     username: config.username,
     authMethod: config.authMethod,
+    privateKeyDirectory: privateKeyDirectoryInput.value.trim() || undefined,
     privateKeyPath: config.privateKeyPath,
     agentSocket: config.agentSocket,
     favorite: favoriteProfileCheckbox.checked,
@@ -466,7 +484,8 @@ async function selectConnectionProfile(profileId: string): Promise<void> {
   favoriteProfileCheckbox.checked = profile.favorite;
   setTargetValue(profile);
   authMethodSelect.value = profile.authMethod;
-  privateKeyPathInput.value = profile.privateKeyPath ?? "";
+  privateKeyDirectoryInput.value = profile.privateKeyDirectory ?? "";
+  await refreshPrivateKeys(profile.privateKeyDirectory, profile.privateKeyPath);
   agentSocketInput.value = profile.agentSocket ?? "";
   rememberPasswordCheckbox.checked = profile.rememberPassword;
   rememberPassphraseCheckbox.checked = profile.rememberPassphrase;
@@ -515,7 +534,9 @@ function createNewProfile(): void {
   authMethodSelect.value = "auto";
   passwordInput.value = "";
   rememberPasswordCheckbox.checked = false;
-  privateKeyPathInput.value = "";
+  privateKeyDirectoryInput.value = "";
+  privateKeyPathSelect.replaceChildren(new Option("No private keys found", ""));
+  privateKeyStatus.textContent = "Scanning the default SSH folder...";
   passphraseInput.value = "";
   rememberPassphraseCheckbox.checked = false;
   agentSocketInput.value = "";
@@ -523,14 +544,38 @@ function createNewProfile(): void {
   updateAuthenticationFields();
   setTcpStatus("idle", "Enter user@hostname:port");
   targetInput.focus();
+  void refreshPrivateKeys().catch(handleProfileError);
 }
 
-async function browsePrivateKey(): Promise<void> {
-  const selectedPath = await window.tetherTerm.selectPrivateKey();
+async function browsePrivateKeyDirectory(): Promise<void> {
+  const selectedDirectory = await window.tetherTerm.selectPrivateKeyDirectory(
+    privateKeyDirectoryInput.value.trim() || undefined
+  );
 
-  if (selectedPath) {
-    privateKeyPathInput.value = selectedPath;
+  if (selectedDirectory) {
+    await refreshPrivateKeys(selectedDirectory);
   }
+}
+
+async function refreshPrivateKeys(directory?: string, preferredPath?: string): Promise<void> {
+  privateKeyStatus.textContent = "Scanning for private keys...";
+  const result: PrivateKeyListResult = await window.tetherTerm.listPrivateKeys(directory);
+  privateKeyDirectoryInput.value = result.directory;
+  const options = result.keys.map((key) => new Option(`${key.name} (${key.format})`, key.path));
+
+  if (options.length === 0) {
+    options.push(new Option("No private keys found", ""));
+  }
+
+  if (preferredPath && !result.keys.some((key) => key.path === preferredPath)) {
+    options.push(new Option(`Unavailable: ${preferredPath}`, preferredPath));
+  }
+
+  privateKeyPathSelect.replaceChildren(...options);
+  privateKeyPathSelect.value = preferredPath && options.some((option) => option.value === preferredPath)
+    ? preferredPath
+    : result.keys[0]?.path ?? "";
+  privateKeyStatus.textContent = `${result.keys.length} private key${result.keys.length === 1 ? "" : "s"} found.`;
 }
 
 function updateAuthenticationFields(): void {

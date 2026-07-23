@@ -84,12 +84,19 @@
 
           <div class="auth-field" data-auth-modes="auto,key">
             <label>
-              Private key <span class="label-hint">optional in Auto</span>
+              Private key folder
               <span class="path-input-row">
-                <input id="private-key-path" name="privateKeyPath" autocomplete="off" placeholder="Auto-detect from ~/.ssh" />
-                <button id="browse-private-key" type="button" title="Select SSH private key">Browse</button>
+                <input id="private-key-directory" name="privateKeyDirectory" autocomplete="off" placeholder="Default: ~/.ssh" />
+                <button id="browse-private-key-directory" type="button" title="Select SSH private key folder">Browse</button>
               </span>
             </label>
+            <label>
+              Private key <span class="label-hint">optional in Auto</span>
+              <select id="private-key-path" name="privateKeyPath">
+                <option value="">No private keys found</option>
+              </select>
+            </label>
+            <div id="private-key-status" class="field-status" aria-live="polite">Select a folder to list private keys.</div>
             <label>
               Key passphrase <span class="label-hint">optional</span>
               <input id="passphrase" name="passphrase" type="password" autocomplete="off" />

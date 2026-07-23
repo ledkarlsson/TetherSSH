@@ -157,6 +157,8 @@ function normalizeProfile(profile: ConnectionProfile): ConnectionProfile {
     port: Number.isFinite(profile.port) && profile.port > 0 ? profile.port : 22,
     username,
     authMethod: profile.authMethod ?? "auto",
+    privateKeyDirectory: profile.privateKeyDirectory?.trim()
+      || (profile.privateKeyPath ? path.dirname(profile.privateKeyPath) : undefined),
     privateKeyPath: profile.privateKeyPath?.trim() || undefined,
     agentSocket: profile.agentSocket?.trim() || undefined,
     favorite: Boolean(profile.favorite),

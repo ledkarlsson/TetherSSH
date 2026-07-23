@@ -20,6 +20,7 @@ interface ConnectionProfile {
   port: number;
   username: string;
   authMethod: AuthenticationMethod;
+  privateKeyDirectory?: string;
   privateKeyPath?: string;
   agentSocket?: string;
   favorite: boolean;
@@ -31,6 +32,17 @@ interface ConnectionProfile {
 interface ProfileSecrets {
   password?: string;
   passphrase?: string;
+}
+
+interface PrivateKeyCandidate {
+  name: string;
+  path: string;
+  format: string;
+}
+
+interface PrivateKeyListResult {
+  directory: string;
+  keys: PrivateKeyCandidate[];
 }
 
 interface TerminalSize {
@@ -86,7 +98,8 @@ interface TetherTermApi {
   saveConnectionProfile(profile: ConnectionProfile, secrets: ProfileSecrets): Promise<ConnectionProfile>;
   deleteConnectionProfile(profileId: string): Promise<void>;
   loadProfileSecrets(profileId: string): Promise<ProfileSecrets>;
-  selectPrivateKey(): Promise<string | undefined>;
+  selectPrivateKeyDirectory(currentDirectory?: string): Promise<string | undefined>;
+  listPrivateKeys(directory?: string): Promise<PrivateKeyListResult>;
   testTcpConnection(host: string, port: number): Promise<TcpTestResult>;
   readClipboardText(): Promise<string>;
   writeClipboardText(text: string): Promise<void>;
@@ -114,7 +127,8 @@ const ipcChannels = {
   saveConnectionProfile: "settings:save-connection-profile",
   deleteConnectionProfile: "settings:delete-connection-profile",
   loadProfileSecrets: "settings:load-profile-secrets",
-  selectPrivateKey: "settings:select-private-key",
+  selectPrivateKeyDirectory: "settings:select-private-key-directory",
+  listPrivateKeys: "settings:list-private-keys",
   testTcpConnection: "network:test-tcp-connection",
   readClipboardText: "clipboard:read-text",
   writeClipboardText: "clipboard:write-text",
@@ -153,8 +167,12 @@ const api: TetherTermApi = {
     return ipcRenderer.invoke(ipcChannels.loadProfileSecrets, profileId);
   },
 
-  selectPrivateKey() {
-    return ipcRenderer.invoke(ipcChannels.selectPrivateKey);
+  selectPrivateKeyDirectory(currentDirectory?: string) {
+    return ipcRenderer.invoke(ipcChannels.selectPrivateKeyDirectory, currentDirectory);
+  },
+
+  listPrivateKeys(directory?: string) {
+    return ipcRenderer.invoke(ipcChannels.listPrivateKeys, directory);
   },
 
   testTcpConnection(host: string, port: number) {

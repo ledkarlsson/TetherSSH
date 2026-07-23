@@ -1,9 +1,15 @@
 const { _electron: electron, expect, test } = require("@playwright/test");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 test("starts the app without renderer errors", async () => {
   const appRoot = path.resolve(__dirname, "..");
+  const keyDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "tetherssh-keys-"));
+  fs.writeFileSync(path.join(keyDirectory, "id_alpha"), "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n");
+  fs.writeFileSync(path.join(keyDirectory, "work-key.ppk"), "PuTTY-User-Key-File-3: ssh-ed25519\n");
+  fs.writeFileSync(path.join(keyDirectory, "id_alpha.pub"), "ssh-ed25519 public-key\n");
+  fs.writeFileSync(path.join(keyDirectory, "notes.txt"), "not a private key\n");
   const app = await electron.launch({
     args: [appRoot],
     cwd: appRoot,
@@ -42,7 +48,19 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#profile-select")).toBeVisible();
     await expect(page.locator("#auth-method")).toHaveValue("auto");
     await expect(page.locator("#private-key-path")).toBeVisible();
+    await expect(page.locator("#private-key-directory")).toBeVisible();
     await expect(page.locator("#agent-socket")).toBeVisible();
+
+    await page.locator("#private-key-directory").fill(keyDirectory);
+    await page.locator("#private-key-directory").dispatchEvent("change");
+    await expect(page.locator("#private-key-status")).toHaveText("2 private keys found.");
+    await expect(page.locator("#private-key-path option")).toHaveCount(2);
+    await expect(page.locator("#private-key-path option")).toHaveText([
+      "id_alpha (OpenSSH)",
+      "work-key.ppk (PuTTY)"
+    ]);
+    await expect(page.locator("#private-key-path option", { hasText: "id_alpha.pub" })).toHaveCount(0);
+    await expect(page.locator("#private-key-path option", { hasText: "notes.txt" })).toHaveCount(0);
 
     await page.locator("#target").fill("");
     await page.locator("#target").fill(target);
@@ -180,6 +198,7 @@ test("starts the app without renderer errors", async () => {
     expect(errors).toEqual([]);
   } finally {
     await app.close();
+    fs.rmSync(keyDirectory, { recursive: true, force: true });
   }
 });
 

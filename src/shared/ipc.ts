@@ -18,6 +18,7 @@ export interface ConnectionProfile {
   port: number;
   username: string;
   authMethod: AuthenticationMethod;
+  privateKeyDirectory?: string;
   privateKeyPath?: string;
   agentSocket?: string;
   favorite: boolean;
@@ -29,6 +30,17 @@ export interface ConnectionProfile {
 export interface ProfileSecrets {
   password?: string;
   passphrase?: string;
+}
+
+export interface PrivateKeyCandidate {
+  name: string;
+  path: string;
+  format: string;
+}
+
+export interface PrivateKeyListResult {
+  directory: string;
+  keys: PrivateKeyCandidate[];
 }
 
 export interface RemoteFile {
@@ -84,7 +96,8 @@ export interface TetherTermApi {
   saveConnectionProfile(profile: ConnectionProfile, secrets: ProfileSecrets): Promise<ConnectionProfile>;
   deleteConnectionProfile(profileId: string): Promise<void>;
   loadProfileSecrets(profileId: string): Promise<ProfileSecrets>;
-  selectPrivateKey(): Promise<string | undefined>;
+  selectPrivateKeyDirectory(currentDirectory?: string): Promise<string | undefined>;
+  listPrivateKeys(directory?: string): Promise<PrivateKeyListResult>;
   testTcpConnection(host: string, port: number): Promise<TcpTestResult>;
   readClipboardText(): Promise<string>;
   writeClipboardText(text: string): Promise<void>;
@@ -112,7 +125,8 @@ export const ipcChannels = {
   saveConnectionProfile: "settings:save-connection-profile",
   deleteConnectionProfile: "settings:delete-connection-profile",
   loadProfileSecrets: "settings:load-profile-secrets",
-  selectPrivateKey: "settings:select-private-key",
+  selectPrivateKeyDirectory: "settings:select-private-key-directory",
+  listPrivateKeys: "settings:list-private-keys",
   testTcpConnection: "network:test-tcp-connection",
   readClipboardText: "clipboard:read-text",
   writeClipboardText: "clipboard:write-text",

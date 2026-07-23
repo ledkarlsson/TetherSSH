@@ -22,6 +22,7 @@ import {
   saveConnectionProfile
 } from "./settingsStore";
 import { verifyHostKey } from "./knownHostsStore";
+import { listPrivateKeys } from "./privateKeyStore";
 
 let mainWindow: BrowserWindow | undefined;
 let session: SshSession | undefined;
@@ -98,16 +99,20 @@ function registerIpcHandlers(): void {
     return loadProfileSecrets(profileId);
   });
 
-  ipcMain.handle(ipcChannels.selectPrivateKey, async () => {
+  ipcMain.handle(ipcChannels.selectPrivateKeyDirectory, async (_event, currentDirectory?: string) => {
     const options: Electron.OpenDialogOptions = {
-      title: "Select SSH private key",
-      defaultPath: path.join(app.getPath("home"), ".ssh"),
-      properties: ["openFile"]
+      title: "Select SSH private key folder",
+      defaultPath: currentDirectory || path.join(app.getPath("home"), ".ssh"),
+      properties: ["openDirectory"]
     };
     const result = mainWindow
       ? await dialog.showOpenDialog(mainWindow, options)
       : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
+  });
+
+  ipcMain.handle(ipcChannels.listPrivateKeys, async (_event, directory?: string) => {
+    return listPrivateKeys(directory);
   });
 
   ipcMain.handle(ipcChannels.testTcpConnection, async (_event, host: string, port: number) => {

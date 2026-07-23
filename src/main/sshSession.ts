@@ -341,9 +341,21 @@ export class SshSession extends EventEmitter {
     }
 
     if (keyEnabled) {
-      const privateKey = this.config.privateKeyPath
-        ? readPrivateKey(this.config.privateKeyPath)
-        : mode === "auto" ? readDefaultPrivateKey() : undefined;
+      let privateKey: { path: string; content: Buffer } | undefined;
+
+      if (this.config.privateKeyPath) {
+        try {
+          privateKey = readPrivateKey(this.config.privateKeyPath);
+        } catch (error) {
+          if (mode === "key") {
+            throw error;
+          }
+
+          this.log(`${toErrorMessage(error)}. Skipping it in Auto mode.`);
+        }
+      } else if (mode === "auto") {
+        privateKey = readDefaultPrivateKey();
+      }
 
       if (privateKey) {
         this.log(`Private key auth available: ${privateKey.path}`);
