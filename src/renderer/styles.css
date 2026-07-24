@@ -179,6 +179,50 @@ select {
   gap: 7px;
 }
 
+.field-heading {
+  color: #b8c2cf;
+  font-size: 13px;
+}
+
+.profile-list {
+  display: grid;
+  max-height: 140px;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid #33404d;
+  border-radius: 6px;
+  background: #0f1419;
+  list-style: none;
+}
+
+.profile-list button {
+  width: 100%;
+  min-height: 30px;
+  border-color: transparent;
+  padding: 5px 7px;
+  background: transparent;
+  color: #cbd5e1;
+  text-align: left;
+}
+
+.profile-list button:hover,
+.profile-list button:focus-visible {
+  background: #1e2935;
+  outline: none;
+}
+
+.profile-list button[aria-current="true"] {
+  background: #253446;
+  color: #f8fafc;
+}
+
+.profile-list-empty {
+  padding: 7px;
+  color: #7f8ea3;
+  font-size: 12px;
+}
+
 .profile-buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -201,6 +245,13 @@ select {
 }
 
 .connection-form .inline-checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+
+.about-dialog .inline-checkbox {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -230,6 +281,26 @@ select {
   color: #7f8ea3;
   font-size: 12px;
   font-weight: 400;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.text-link {
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #75c7d8;
+  text-decoration: underline;
+}
+
+.status:empty {
+  display: none;
 }
 
 .field-status {

@@ -359,6 +359,10 @@ function registerIpcHandlers(): void {
     return checkForUpdates();
   });
 
+  ipcMain.handle(ipcChannels.openFeedbackEmail, () => {
+    return shell.openExternal("mailto:led.karlsson@gmail.com?subject=TetherSSH%20feedback");
+  });
+
   ipcMain.handle(ipcChannels.loadGlobalConnectionSettings, () => {
     return loadGlobalConnectionSettings();
   });

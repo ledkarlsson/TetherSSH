@@ -38,6 +38,7 @@ interface ProfileSecrets {
 interface GlobalConnectionSettings {
   privateKeyDirectory?: string;
   agentSocket?: string;
+  rememberCredentials?: boolean;
 }
 
 interface PrivateKeyCandidate {
@@ -119,6 +120,7 @@ type ConnectResponse =
 interface TetherTermApi {
   getAppInfo(): Promise<AppInfo>;
   checkForUpdates(): Promise<UpdateCheckResult>;
+  openFeedbackEmail(): Promise<void>;
   loadGlobalConnectionSettings(): Promise<GlobalConnectionSettings>;
   saveGlobalConnectionSettings(settings: GlobalConnectionSettings): Promise<GlobalConnectionSettings>;
   listConnectionProfiles(): Promise<ConnectionProfile[]>;
@@ -156,6 +158,7 @@ interface TetherTermApi {
 const ipcChannels = {
   getAppInfo: "app:get-info",
   checkForUpdates: "app:check-for-updates",
+  openFeedbackEmail: "app:open-feedback-email",
   showAbout: "app:show-about",
   updateAvailable: "app:update-available",
   showConnectionSettings: "app:show-connection-settings",
@@ -196,6 +199,10 @@ const api: TetherTermApi = {
 
   checkForUpdates() {
     return ipcRenderer.invoke(ipcChannels.checkForUpdates);
+  },
+
+  openFeedbackEmail() {
+    return ipcRenderer.invoke(ipcChannels.openFeedbackEmail);
   },
 
   loadGlobalConnectionSettings() {

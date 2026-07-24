@@ -52,6 +52,7 @@ interface ProfileSecrets {
 interface GlobalConnectionSettings {
   privateKeyDirectory?: string;
   agentSocket?: string;
+  rememberCredentials?: boolean;
 }
 
 interface PrivateKeyCandidate {
@@ -131,23 +132,21 @@ const XTerm = (globalThis as unknown as {
 
 const terminalElement = requireElement<HTMLDivElement>("#terminal");
 const form = requireElement<HTMLFormElement>("#connection-form");
-const profileSelect = requireElement<HTMLSelectElement>("#profile-select");
-const profileNameInput = requireElement<HTMLInputElement>("#profile-name");
+const profileList = requireElement<HTMLOListElement>("#profile-list");
 const favoriteProfileCheckbox = requireElement<HTMLInputElement>("#favorite-profile");
 const newProfileButton = requireElement<HTMLButtonElement>("#new-profile");
 const saveProfileButton = requireElement<HTMLButtonElement>("#save-profile");
 const deleteProfileButton = requireElement<HTMLButtonElement>("#delete-profile");
 const targetInput = requireElement<HTMLInputElement>("#target");
 const passwordInput = requireElement<HTMLInputElement>("#password");
-const rememberPasswordCheckbox = requireElement<HTMLInputElement>("#remember-password");
 const authMethodSelect = requireElement<HTMLSelectElement>("#auth-method");
 const privateKeyDirectoryInput = requireElement<HTMLInputElement>("#private-key-directory");
 const browsePrivateKeyDirectoryButton = requireElement<HTMLButtonElement>("#browse-private-key-directory");
 const privateKeyStatus = requireElement<HTMLDivElement>("#private-key-status");
 const globalPrivateKeyList = requireElement<HTMLOListElement>("#global-private-key-list");
 const passphraseInput = requireElement<HTMLInputElement>("#passphrase");
-const rememberPassphraseCheckbox = requireElement<HTMLInputElement>("#remember-passphrase");
 const agentSocketInput = requireElement<HTMLInputElement>("#agent-socket");
+const rememberCredentialsCheckbox = requireElement<HTMLInputElement>("#remember-credentials");
 const connectButton = requireElement<HTMLButtonElement>("#connect-button");
 const disconnectButton = requireElement<HTMLButtonElement>("#disconnect-button");
 const toggleConnectionPanelButton = requireElement<HTMLButtonElement>("#toggle-connection-panel");
@@ -167,6 +166,7 @@ const aboutDialog = requireElement<HTMLDialogElement>("#about-dialog");
 const appVersion = requireElement<HTMLElement>("#app-version");
 const updateStatus = requireElement<HTMLDivElement>("#update-status");
 const closeAboutButton = requireElement<HTMLButtonElement>("#close-about-button");
+const feedbackEmailButton = requireElement<HTMLButtonElement>("#feedback-email");
 const connectionSettingsDialog = requireElement<HTMLDialogElement>("#connection-settings-dialog");
 const connectionSettingsForm = requireElement<HTMLFormElement>("#connection-settings-form");
 const closeConnectionSettingsButton = requireElement<HTMLButtonElement>("#close-connection-settings");
@@ -195,6 +195,7 @@ const directoryClickTimers = new Map<string, number>();
 let fileSortKey: FileSortKey = "name";
 let fileSortAscending = true;
 let connectionProfiles: ConnectionProfile[] = [];
+let selectedProfileId = "";
 let globalConnectionSettings: GlobalConnectionSettings = {};
 let globalPrivateKeys: PrivateKeyCandidate[] = [];
 const fileContextMenu = createFileContextMenu();
@@ -239,6 +240,9 @@ window.tetherTerm.onShowConnectionSettings(() => {
 closeAboutButton.addEventListener("click", () => {
   aboutDialog.close();
 });
+feedbackEmailButton.addEventListener("click", () => {
+  void window.tetherTerm.openFeedbackEmail();
+});
 closeConnectionSettingsButton.addEventListener("click", () => {
   connectionSettingsDialog.close();
 });
@@ -253,9 +257,6 @@ aboutDialog.addEventListener("click", (event) => {
 });
 
 targetInput.addEventListener("input", scheduleTcpCheck);
-profileSelect.addEventListener("change", () => {
-  void selectConnectionProfile(profileSelect.value).catch(handleProfileError);
-});
 newProfileButton.addEventListener("click", createNewProfile);
 saveProfileButton.addEventListener("click", () => {
   void saveCurrentProfile(false).catch(handleProfileError);
@@ -313,6 +314,7 @@ async function initializeSettings(): Promise<void> {
   globalConnectionSettings = await window.tetherTerm.loadGlobalConnectionSettings();
   privateKeyDirectoryInput.value = globalConnectionSettings.privateKeyDirectory ?? "";
   agentSocketInput.value = globalConnectionSettings.agentSocket ?? "";
+  rememberCredentialsCheckbox.checked = Boolean(globalConnectionSettings.rememberCredentials);
   await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory);
   await loadConnectionProfiles();
 }
@@ -321,6 +323,7 @@ async function showConnectionSettingsDialog(): Promise<void> {
   globalConnectionSettings = await window.tetherTerm.loadGlobalConnectionSettings();
   privateKeyDirectoryInput.value = globalConnectionSettings.privateKeyDirectory ?? "";
   agentSocketInput.value = globalConnectionSettings.agentSocket ?? "";
+  rememberCredentialsCheckbox.checked = Boolean(globalConnectionSettings.rememberCredentials);
   await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory);
   connectionSettingsDialog.showModal();
 }
@@ -328,7 +331,8 @@ async function showConnectionSettingsDialog(): Promise<void> {
 async function saveConnectionSettings(): Promise<void> {
   globalConnectionSettings = await window.tetherTerm.saveGlobalConnectionSettings({
     privateKeyDirectory: privateKeyDirectoryInput.value.trim() || undefined,
-    agentSocket: agentSocketInput.value.trim() || undefined
+    agentSocket: agentSocketInput.value.trim() || undefined,
+    rememberCredentials: rememberCredentialsCheckbox.checked
   });
   await refreshPrivateKeys(globalConnectionSettings.privateKeyDirectory);
   connectionSettingsDialog.close();
@@ -529,7 +533,6 @@ async function loadConnectionProfiles(preferredProfileId?: string): Promise<void
       return;
     }
 
-    profileSelect.value = profileId;
     await selectConnectionProfile(profileId);
     appendSessionLog(`Loaded ${connectionProfiles.length} connection profile${connectionProfiles.length === 1 ? "" : "s"}.`);
   } catch (error) {
@@ -539,14 +542,13 @@ async function loadConnectionProfiles(preferredProfileId?: string): Promise<void
 
 function currentConnectionProfile(markUsed: boolean): ConnectionProfile {
   const config = readConnectionConfig();
-  const requestedName = profileNameInput.value.trim() || `${config.username}@${config.host}`;
-  const existing = connectionProfiles.find((profile) => profile.id === profileSelect.value)
+  const existing = connectionProfiles.find((profile) => profile.id === selectedProfileId)
     ?? connectionProfiles.find((profile) => (
-      profile.name.localeCompare(requestedName, undefined, { sensitivity: "base" }) === 0 &&
       profile.username === config.username &&
       profile.host.localeCompare(config.host, undefined, { sensitivity: "base" }) === 0 &&
       profile.port === config.port
     ));
+  const requestedName = existing?.name ?? `${config.username}@${config.host}`;
   return {
     id: existing?.id ?? crypto.randomUUID(),
     name: requestedName,
@@ -555,8 +557,8 @@ function currentConnectionProfile(markUsed: boolean): ConnectionProfile {
     username: config.username,
     authMethod: config.authMethod,
     favorite: favoriteProfileCheckbox.checked,
-    rememberPassword: rememberPasswordCheckbox.checked,
-    rememberPassphrase: rememberPassphraseCheckbox.checked,
+    rememberPassword: Boolean(globalConnectionSettings.rememberCredentials),
+    rememberPassphrase: Boolean(globalConnectionSettings.rememberCredentials),
     lastUsedAt: markUsed ? Date.now() : existing?.lastUsedAt ?? Date.now()
   };
 }
@@ -566,14 +568,30 @@ function setTargetValue(profile: ConnectionProfile): void {
 }
 
 function renderConnectionProfiles(): void {
-  const options = [new Option("New connection", "")];
-
-  for (const profile of connectionProfiles) {
-    const prefix = profile.favorite ? "* " : "";
-    options.push(new Option(`${prefix}${profile.name}`, profile.id));
+  if (connectionProfiles.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "profile-list-empty";
+    empty.textContent = "No saved profiles";
+    profileList.replaceChildren(empty);
+    return;
   }
 
-  profileSelect.replaceChildren(...options);
+  profileList.replaceChildren(...connectionProfiles.map((profile) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${profile.favorite ? "★ " : ""}${profile.name}`;
+    button.setAttribute("aria-current", String(profile.id === selectedProfileId));
+    button.addEventListener("click", () => {
+      void selectConnectionProfile(profile.id).catch(handleProfileError);
+    });
+    button.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      void renameConnectionProfile(profile.id).catch(handleProfileError);
+    });
+    item.append(button);
+    return item;
+  }));
 }
 
 async function selectConnectionProfile(profileId: string): Promise<void> {
@@ -589,13 +607,11 @@ async function selectConnectionProfile(profileId: string): Promise<void> {
   }
 
   const secrets = await window.tetherTerm.loadProfileSecrets(profile.id);
-  profileSelect.value = profile.id;
-  profileNameInput.value = profile.name;
+  selectedProfileId = profile.id;
+  renderConnectionProfiles();
   favoriteProfileCheckbox.checked = profile.favorite;
   setTargetValue(profile);
   authMethodSelect.value = profile.authMethod;
-  rememberPasswordCheckbox.checked = profile.rememberPassword;
-  rememberPassphraseCheckbox.checked = profile.rememberPassphrase;
   passwordInput.value = secrets.password ?? "";
   passphraseInput.value = secrets.passphrase ?? "";
   deleteProfileButton.disabled = false;
@@ -622,7 +638,7 @@ async function saveCurrentProfile(markUsed: boolean): Promise<void> {
 }
 
 async function deleteCurrentProfile(): Promise<void> {
-  const profile = connectionProfiles.find((candidate) => candidate.id === profileSelect.value);
+  const profile = connectionProfiles.find((candidate) => candidate.id === selectedProfileId);
 
   if (!profile || !window.confirm(`Delete profile "${profile.name}"?`)) {
     return;
@@ -633,16 +649,33 @@ async function deleteCurrentProfile(): Promise<void> {
   setTransientStatus(`Deleted profile ${profile.name}.`);
 }
 
+async function renameConnectionProfile(profileId: string): Promise<void> {
+  const profile = connectionProfiles.find((candidate) => candidate.id === profileId);
+
+  if (!profile) {
+    return;
+  }
+
+  const requestedName = window.prompt("Rename connection profile", profile.name)?.trim();
+
+  if (!requestedName || requestedName === profile.name) {
+    return;
+  }
+
+  const secrets = await window.tetherTerm.loadProfileSecrets(profile.id);
+  await window.tetherTerm.saveConnectionProfile({ ...profile, name: requestedName }, secrets);
+  await loadConnectionProfiles(profile.id);
+  setTransientStatus(`Renamed profile to ${requestedName}.`);
+}
+
 function createNewProfile(): void {
-  profileSelect.value = "";
-  profileNameInput.value = "";
+  selectedProfileId = "";
+  renderConnectionProfiles();
   favoriteProfileCheckbox.checked = false;
   targetInput.value = "";
   authMethodSelect.value = "auto";
   passwordInput.value = "";
-  rememberPasswordCheckbox.checked = false;
   passphraseInput.value = "";
-  rememberPassphraseCheckbox.checked = false;
   deleteProfileButton.disabled = true;
   updateAuthenticationFields();
   setTcpStatus("idle", "Enter user@hostname:port");
@@ -771,7 +804,7 @@ function resetDisconnectedState(): void {
   resetTerminalTitle();
   setConnectionPanelCollapsed(false);
   document.body.classList.add("disconnected");
-  setStatus("Disconnected");
+  setStatus("");
   resizeTerminal();
 }
 

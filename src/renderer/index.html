@@ -26,23 +26,14 @@
 
         <form id="connection-form" class="connection-form">
           <div class="profile-toolbar">
-            <label>
-              Profile
-              <select id="profile-select">
-                <option value="">New connection</option>
-              </select>
-            </label>
+            <span class="field-heading">Profiles</span>
+            <ol id="profile-list" class="profile-list" aria-label="Connection profiles"></ol>
             <div class="profile-buttons">
               <button id="new-profile" type="button">New</button>
               <button id="save-profile" type="button">Save</button>
               <button id="delete-profile" type="button" disabled>Delete</button>
             </div>
           </div>
-
-          <label>
-            Profile name
-            <input id="profile-name" name="profileName" autocomplete="off" placeholder="Production server" />
-          </label>
 
           <label class="inline-checkbox">
             <input id="favorite-profile" name="favorite" type="checkbox" />
@@ -67,24 +58,16 @@
           </label>
 
           <div class="auth-field" data-auth-modes="auto,password">
-          <label>
-            Password <span class="label-hint">optional</span>
-            <input id="password" name="password" type="password" autocomplete="current-password" />
-          </label>
-            <label class="inline-checkbox">
-              <input id="remember-password" name="rememberPassword" type="checkbox" />
-              Remember password securely
+            <label>
+              <span class="field-label-row"><span>Password</span><span class="label-hint">optional</span></span>
+              <input id="password" name="password" type="password" autocomplete="current-password" />
             </label>
           </div>
 
           <div class="auth-field" data-auth-modes="auto,key">
             <label>
-              Key passphrase <span class="label-hint">optional</span>
+              <span class="field-label-row"><span>Key passphrase</span><span class="label-hint">optional</span></span>
               <input id="passphrase" name="passphrase" type="password" autocomplete="off" />
-            </label>
-            <label class="inline-checkbox">
-              <input id="remember-passphrase" name="rememberPassphrase" type="checkbox" />
-              Remember passphrase securely
             </label>
           </div>
 
@@ -92,7 +75,7 @@
           <button id="disconnect-button" type="button" disabled>Disconnect</button>
         </form>
 
-        <div id="status" class="status">Disconnected</div>
+        <div id="status" class="status" aria-live="polite"></div>
         <section class="session-log-panel">
           <div class="session-log-title">
             <span>Session log</span>
@@ -155,7 +138,8 @@
       <div class="about-dialog-content">
         <h2 id="about-title">About TetherSSH</h2>
         <p>Terminal and remote files, tied to one SSH session.</p>
-        <p>Daniel Karlsson</p>
+        <p>Code authored by Daniel Karlsson. This application was generated with AI assistance.</p>
+        <p>Feedback is welcome at <button id="feedback-email" class="text-link" type="button">led.karlsson@gmail.com</button>.</p>
         <p class="about-version">Version <strong id="app-version">—</strong></p>
         <div id="update-status" class="update-status" aria-live="polite"></div>
         <div class="about-dialog-actions">
@@ -180,6 +164,10 @@
         <label>
           SSH agent socket
           <input id="agent-socket" autocomplete="off" placeholder="SSH_AUTH_SOCK or Pageant" />
+        </label>
+        <label class="inline-checkbox">
+          <input id="remember-credentials" type="checkbox" />
+          Remember all connection credentials securely
         </label>
         <div class="about-dialog-actions">
           <button id="save-connection-settings" type="submit">Save</button>

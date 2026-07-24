@@ -121,9 +121,19 @@ export async function loadGlobalConnectionSettings(): Promise<GlobalConnectionSe
       const legacyProfile = settings.profiles?.find((profile) => profile.privateKeyDirectory || profile.agentSocket);
       return {
         privateKeyDirectory: legacyProfile?.privateKeyDirectory,
-        agentSocket: legacyProfile?.agentSocket
+        agentSocket: legacyProfile?.agentSocket,
+        rememberCredentials: settings.profiles?.some(
+          (profile) => profile.rememberPassword || profile.rememberPassphrase
+        )
       };
     })();
+
+  if (stored.rememberCredentials === undefined) {
+    stored.rememberCredentials = settings.profiles?.some(
+      (profile) => profile.rememberPassword || profile.rememberPassphrase
+    );
+  }
+
   const normalized = normalizeGlobalConnectionSettings(stored);
 
   if (normalized.privateKeyDirectory && !(await directoryExists(normalized.privateKeyDirectory))) {
@@ -223,7 +233,8 @@ function normalizeProfile(profile: ConnectionProfile): ConnectionProfile {
 function normalizeGlobalConnectionSettings(settings: GlobalConnectionSettings): GlobalConnectionSettings {
   return {
     privateKeyDirectory: settings.privateKeyDirectory?.trim() || undefined,
-    agentSocket: settings.agentSocket?.trim() || undefined
+    agentSocket: settings.agentSocket?.trim() || undefined,
+    rememberCredentials: Boolean(settings.rememberCredentials)
   };
 }
 

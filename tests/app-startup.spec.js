@@ -64,6 +64,8 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#about-dialog")).toBeVisible();
     await expect(page.locator("#app-version")).toHaveText("0.1.0");
     await expect(page.locator("#about-dialog")).toContainText("Daniel Karlsson");
+    await expect(page.locator("#about-dialog")).toContainText("generated with AI assistance");
+    await expect(page.locator("#feedback-email")).toHaveText("led.karlsson@gmail.com");
     await expect(page.locator("#update-status"))
       .toHaveText("Update checks are available in the installed version of TetherSSH.");
     await page.locator("#close-about-button").click();
@@ -99,7 +101,9 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#session-log")).toBeVisible();
     await expect(page.locator("#refresh-files")).toHaveCount(0);
     await expect(page.locator("fieldset")).toHaveCount(0);
-    await expect(page.locator("#profile-select")).toBeVisible();
+    await expect(page.locator("#profile-list")).toBeVisible();
+    await expect(page.locator("#profile-name")).toHaveCount(0);
+    await expect(page.locator("#status")).toBeHidden();
     await expect(page.locator("#auth-method")).toHaveValue("auto");
     await expect(page.locator("#private-key-path")).toHaveCount(0);
     await app.evaluate(({ BrowserWindow }, channel) => {
@@ -109,6 +113,7 @@ test("starts the app without renderer errors", async () => {
     await expect(page.locator("#private-key-directory")).toBeVisible();
     await expect(page.locator("#agent-socket")).toBeVisible();
     await expect(page.locator("#private-key-directory")).toHaveValue(path.join(os.homedir(), ".ssh"));
+    await page.locator("#remember-credentials").check();
 
     await page.locator("#private-key-directory").fill(keyDirectory);
     await page.locator("#private-key-directory").dispatchEvent("change");
@@ -125,9 +130,7 @@ test("starts the app without renderer errors", async () => {
 
     await page.locator("#target").fill("");
     await page.locator("#target").fill(target);
-    await page.locator("#profile-name").fill("Local test server");
     await page.locator("#password").fill(password);
-    await page.locator("#remember-password").check();
 
     await expect(page.locator("#target")).toHaveValue(target);
     await expect(page.locator("#password")).toHaveValue(password);
@@ -166,7 +169,12 @@ test("starts the app without renderer errors", async () => {
     await page.locator("#toggle-connection-panel").click();
     await expect(page.locator("body")).not.toHaveClass(/connection-panel-collapsed/);
     await expect(page.locator("#connection-form")).toBeVisible();
-    await expect(page.locator("#profile-select option", { hasText: "Local test server" })).toHaveCount(1);
+    await expect(page.locator("#profile-list button", { hasText: "test@localhost" })).toHaveCount(1);
+    await page.evaluate(() => {
+      window.prompt = () => "Local test server";
+    });
+    await page.locator("#profile-list button", { hasText: "test@localhost" }).click({ button: "right" });
+    await expect(page.locator("#profile-list button", { hasText: "Local test server" })).toHaveCount(1);
     await expect(page.locator("#session-log")).toContainText(/Host key (accepted|verified)/);
     await expect(page.locator("#session-log")).toContainText("SSH authenticated with password");
 
